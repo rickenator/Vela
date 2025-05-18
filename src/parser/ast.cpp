@@ -16,8 +16,8 @@ namespace ast {
 ObjectLiteral::~ObjectLiteral() = default;
 
 // ObjectLiteral constructor implementation
-ObjectLiteral::ObjectLiteral(SourceLocation loc, std::vector<ObjectProperty> properties)
-    : Expression(loc), properties(std::move(properties)) {}
+ObjectLiteral::ObjectLiteral(SourceLocation loc, TypeNodePtr typePath, std::vector<ObjectProperty> properties)
+    : Expression(loc), typePath(std::move(typePath)), properties(std::move(properties)) {}
 
 NodeType ObjectLiteral::getType() const {
     return NodeType::OBJECT_LITERAL_NODE;
@@ -25,6 +25,9 @@ NodeType ObjectLiteral::getType() const {
 
 std::string ObjectLiteral::toString() const {
     std::stringstream ss;
+    if (typePath) {
+        ss << typePath->toString();
+    }
     ss << "{\\";
     for (size_t i = 0; i < properties.size(); ++i) {
         ss << properties[i].key->toString() << ": " << properties[i].value->toString();
@@ -361,34 +364,34 @@ void StringLiteral::accept(Visitor& visitor) {
     visitor.visit(this); 
 }
 
-// --- ArrayLiteralNode ---
-ArrayLiteralNode::ArrayLiteralNode(SourceLocation loc_param, std::vector<ExprPtr> elements_param)
+// --- ArrayLiteral ---
+ArrayLiteral::ArrayLiteral(SourceLocation loc_param, std::vector<ExprPtr> elements_param) // Renamed from ArrayLiteralNode
     : Expression(loc_param), elements(std::move(elements_param)) {}
 
-void ArrayLiteralNode::accept(Visitor& visitor) {
+void ArrayLiteral::accept(Visitor& visitor) { // Renamed from ArrayLiteralNode
     visitor.visit(this);
 }
 
-std::string ArrayLiteralNode::toString() const {
+std::string ArrayLiteral::toString() const { // Renamed from ArrayLiteralNode
     std::stringstream ss;
-    ss << "ArrayLiteralNode([";
+    ss << \"ArrayLiteral([\"; // Renamed from ArrayLiteralNode
     for (size_t i = 0; i < elements.size(); ++i) {
-        if (elements[i]) ss << elements[i]->toString(); else ss << "<null_element>";
-        if (i < elements.size() - 1) ss << ", ";
+        if (elements[i]) ss << elements[i]->toString(); else ss << \"<null_element>\";
+        if (i < elements.size() - 1) ss << \", \";
     }
-    ss << "])";
+    ss << \"])\";
     return ss.str();
 }
 
-// --- BorrowExprNode ---
-BorrowExprNode::BorrowExprNode(SourceLocation loc_param, ExprPtr expression_param, BorrowKind kind_param)
+// --- BorrowExpression ---
+BorrowExpression::BorrowExpression(SourceLocation loc_param, ExprPtr expression_param, BorrowKind kind_param) // Renamed from BorrowExprNode
     : Expression(loc_param), expression(std::move(expression_param)), kind(kind_param) {}
 
-void BorrowExprNode::accept(Visitor& visitor) {
+void BorrowExpression::accept(Visitor& visitor) { // Renamed from BorrowExprNode
     visitor.visit(this);
 }
 
-std::string BorrowExprNode::toString() const {
+std::string BorrowExpression::toString() const { // Renamed from BorrowExprNode
     std::string prefix_str; // Renamed prefix to prefix_str
     switch (kind) {
         case BorrowKind::MUTABLE_BORROW:
@@ -661,18 +664,18 @@ void ImplDeclaration::accept(Visitor& visitor) {
     visitor.visit(this);
 }
 
-// EnumVariantNode
-EnumVariantNode::EnumVariantNode(SourceLocation loc_param, std::unique_ptr<Identifier> n_param, std::vector<TypeNodePtr> tns_param) // Renamed params
+// EnumVariant
+EnumVariant::EnumVariant(SourceLocation loc_param, std::unique_ptr<Identifier> n_param, std::vector<TypeNodePtr> tns_param) // Renamed from EnumVariantNode
     : Node(loc_param), name(std::move(n_param)), associatedTypes(std::move(tns_param)) {}
 
-NodeType EnumVariantNode::getType() const {
+NodeType EnumVariant::getType() const { // Renamed from EnumVariantNode
     return NodeType::ENUM_VARIANT;
 }
 
-std::string EnumVariantNode::toString() const {
+std::string EnumVariant::toString() const { // Renamed from EnumVariantNode
     std::stringstream ss;
-    ss << "EnumVariantNode(" << this->name->toString(); // Explicit this->
-    if (!this->associatedTypes.empty()) { // Explicit this->
+    ss << "EnumVariant(" << this->name->toString(); // Renamed from EnumVariantNode
+    if (!this->associatedTypes.empty()) { 
         ss << "(";
         for (size_t i = 0; i < this->associatedTypes.size(); ++i) { 
             if (this->associatedTypes[i]) ss << this->associatedTypes[i]->toString(); else ss << "<null_assoc_type>";
@@ -684,12 +687,12 @@ std::string EnumVariantNode::toString() const {
     return ss.str();
 }
 
-void EnumVariantNode::accept(Visitor& visitor) {
+void EnumVariant::accept(Visitor& visitor) { // Renamed from EnumVariantNode
     visitor.visit(this);
 }
 
 // EnumDeclaration
-EnumDeclaration::EnumDeclaration(SourceLocation loc_param, std::unique_ptr<Identifier> n_param, std::vector<std::unique_ptr<GenericParamNode>> gp_param, std::vector<std::unique_ptr<EnumVariantNode>> vars_param) // Renamed params
+EnumDeclaration::EnumDeclaration(SourceLocation loc_param, std::unique_ptr<Identifier> n_param, std::vector<std::unique_ptr<GenericParamNode>> gp_param, std::vector<std::unique_ptr<EnumVariant>> vars_param) // Renamed from EnumVariantNode
     : Declaration(loc_param), name(std::move(n_param)), genericParams(std::move(gp_param)), variants(std::move(vars_param)) {}
 
 NodeType EnumDeclaration::getType() const {
@@ -719,18 +722,18 @@ void EnumDeclaration::accept(Visitor& visitor) {
     visitor.visit(this);
 }
 
-// GenericParamNode
-GenericParamNode::GenericParamNode(SourceLocation loc_param, std::unique_ptr<Identifier> n_param, std::vector<TypeNodePtr> b_param) // Renamed params
+// GenericParameter
+GenericParameter::GenericParameter(SourceLocation loc_param, std::unique_ptr<Identifier> n_param, std::vector<TypeNodePtr> b_param) // Renamed from GenericParamNode
     : Node(loc_param), name(std::move(n_param)), bounds(std::move(b_param)) {}
 
-NodeType GenericParamNode::getType() const {
+NodeType GenericParameter::getType() const { // Renamed from GenericParamNode
     return NodeType::GENERIC_PARAMETER;
 }
 
-std::string GenericParamNode::toString() const {
+std::string GenericParameter::toString() const { // Renamed from GenericParamNode
     std::stringstream ss;
-    ss << "GenericParamNode(" << this->name->toString(); // Explicit this->
-    if (!this->bounds.empty()) { // Explicit this->
+    ss << "GenericParameter(" << this->name->toString(); // Renamed from GenericParamNode
+    if (!this->bounds.empty()) { 
         ss << ": ";
         for (size_t i = 0; i < this->bounds.size(); ++i) {
             if (this->bounds[i]) ss << this->bounds[i]->toString(); else ss << "<null_bound>";
@@ -741,23 +744,23 @@ std::string GenericParamNode::toString() const {
     return ss.str();
 }
 
-void GenericParamNode::accept(Visitor& visitor) {
+void GenericParameter::accept(Visitor& visitor) { // Renamed from GenericParamNode
     visitor.visit(this);
 }
 
-// TemplateDeclarationNode
-TemplateDeclarationNode::TemplateDeclarationNode(SourceLocation loc_param, std::unique_ptr<Identifier> name_param, std::vector<std::unique_ptr<GenericParamNode>> generic_params_param, DeclPtr body_param) // Renamed params
+// TemplateDeclaration
+TemplateDeclaration::TemplateDeclaration(SourceLocation loc_param, std::unique_ptr<Identifier> name_param, std::vector<std::unique_ptr<GenericParameter>> generic_params_param, DeclPtr body_param) // Renamed from TemplateDeclarationNode
     : Declaration(loc_param), name(std::move(name_param)), genericParams(std::move(generic_params_param)), body(std::move(body_param)) {}
 
-NodeType TemplateDeclarationNode::getType() const {
+NodeType TemplateDeclaration::getType() const { // Renamed from TemplateDeclarationNode
     return NodeType::TEMPLATE_DECLARATION;
 }
 
-std::string TemplateDeclarationNode::toString() const {
-    std::string str_val = "template " + this->name->name + "<"; // Explicit this->, use name->name
-    for (size_t i = 0; i < this->genericParams.size(); ++i) { // Explicit this->
+std::string TemplateDeclaration::toString() const { // Renamed from TemplateDeclarationNode
+    std::string str_val = "template " + this->name->name + "<"; 
+    for (size_t i = 0; i < this->genericParams.size(); ++i) { 
         if (this->genericParams[i]) {
-            str_val += this->genericParams[i]->name->name; // Use name->name
+            str_val += this->genericParams[i]->name->name; 
             if (!this->genericParams[i]->bounds.empty()) {
                 str_val += ": ";
                 for (size_t j = 0; j < this->genericParams[i]->bounds.size(); ++j) {
@@ -775,14 +778,70 @@ std::string TemplateDeclarationNode::toString() const {
         }
     }
     str_val += "> {\\\\n";
-    if (this->body) { // Explicit this->
+    if (this->body) { 
         str_val += this->body->toString(); 
     }
     str_val += "\\\\n}";
     return str_val;
 }
 
-void TemplateDeclarationNode::accept(Visitor& visitor) {
+void TemplateDeclaration::accept(Visitor& visitor) { // Renamed from TemplateDeclarationNode
+    visitor.visit(this);
+}
+
+// --- ConstructionExpression ---
+ConstructionExpression::ConstructionExpression(SourceLocation loc, TypeNodePtr constructedType, std::vector<ExprPtr> arguments)
+    : Expression(loc), constructedType(std::move(constructedType)), arguments(std::move(arguments)) {}
+
+NodeType ConstructionExpression::getType() const {
+    return NodeType::CONSTRUCTION_EXPRESSION;
+}
+
+std::string ConstructionExpression::toString() const {
+    std::stringstream ss;
+    if (constructedType) {
+        ss << constructedType->toString();
+    }
+    ss << "(";
+    for (size_t i = 0; i < arguments.size(); ++i) {
+        if (arguments[i]) {
+            ss << arguments[i]->toString();
+        }
+        if (i < arguments.size() - 1) {
+            ss << ", ";
+        }
+    }
+    ss << ")";
+    return ss.str();
+}
+
+void ConstructionExpression::accept(Visitor& visitor) {
+    visitor.visit(this);
+}
+
+// --- ArrayInitializationExpression ---
+ArrayInitializationExpression::ArrayInitializationExpression(SourceLocation loc, TypeNodePtr elementType, ExprPtr sizeExpression)
+    : Expression(loc), elementType(std::move(elementType)), sizeExpression(std::move(sizeExpression)) {}
+
+NodeType ArrayInitializationExpression::getType() const {
+    return NodeType::ARRAY_INITIALIZATION_EXPRESSION;
+}
+
+std::string ArrayInitializationExpression::toString() const {
+    std::stringstream ss;
+    ss << "[";
+    if (elementType) {
+        ss << elementType->toString();
+    }
+    ss << "; ";
+    if (sizeExpression) {
+        ss << sizeExpression->toString();
+    }
+    ss << "]()";
+    return ss.str();
+}
+
+void ArrayInitializationExpression::accept(Visitor& visitor) {
     visitor.visit(this);
 }
 

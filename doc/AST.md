@@ -1,7 +1,7 @@
 <!-- filepath: /home/rick/Projects/Vyn/doc/AST.md -->
 # Vyn AST Design Document
 
-*(Note: This document outlines the design for the Abstract Syntax Tree (AST) for the Vyn programming language. It describes both the features currently implemented in `include/vyn/ast.hpp` and `src/ast.cpp`, and planned features that are not yet implemented. Sections or specific details referring to planned features will be explicitly marked.)*
+*(Note: This document outlines the design for the Abstract Syntax Tree (AST) for the Vyn programming language. It describes both the features currently implemented in `include/vyn/ast.hpp`, `src/ast.cpp`, and `src/ast_extra.cpp`, and planned features that are not yet implemented. Sections or specific details referring to planned features will be explicitly marked.)*
 
 ## 1. Introduction
 
@@ -15,7 +15,7 @@ All AST nodes inherit from a base `Node` class as defined in `include/vyn/ast.hp
 
 ```cpp
 // Structure in include/vyn/ast.hpp
-namespace vyn { // Adjusted to 'vyn' namespace as in ast.hpp
+namespace vyn { // Adjusted to \'vyn\' namespace as in ast.hpp
 
 // Forward declarations for Visitor pattern (from ast.hpp)
 class Node;
@@ -28,10 +28,9 @@ class ClassDeclaration;
 class FieldDeclaration;
 class ImplDeclaration;
 class EnumDeclaration;
-class EnumVariantNode;
-class GenericParamNode;
-class TypeAnnotation; // Added: Forward declaration for TypeAnnotation
-class Module;         // Added: Forward declaration for Module
+class EnumVariant;
+class GenericParameter; // Formerly GenericParamNode
+class TypeNode; // Was TypeAnnotation in some older doc versions
 
 // SourceLocation is defined in "vyn/source_location.hpp"
 // struct SourceLocation {
@@ -40,7 +39,29 @@ class Module;         // Added: Forward declaration for Module
 //     int column;
 // };
 
-// NodeType enum as defined in ast.hpp
+// Base AST Node (matches ast.hpp)
+class Node {\npublic:
+    SourceLocation loc; // From vyn::source_location.hpp
+    std::string inferredTypeName; // Added for type checking/codegen hints
+
+    Node(SourceLocation loc);\n    virtual ~Node() = default;\n    virtual NodeType getType() const = 0;\n    virtual std::string toString() const = 0;\n    virtual void accept(Visitor& visitor) = 0;\n    // Note: \'parent\' pointer is not part of the current C++ Node class.\n};\n\n// Base Expression Node (matches ast.hpp)\nclass Expression : public Node {\npublic:\n    Expression(SourceLocation loc);\n};\n\n// Base Statement Node (matches ast.hpp)\nclass Statement : public Node {\npublic:\n    Statement(SourceLocation loc);\n};\n\n// Base Declaration Node (matches ast.hpp, Declarations are Statements)\nclass Declaration : public Statement {\npublic:\n    Declaration(SourceLocation loc);\n};\n\n// Conceptual base classes from original design\n// class TypeNode : public Node { /* ... */ }; // *(Note: This specific base class is conceptual; vyn::ast::TypeNode is the implemented type representation.)*\n// class PatternNode : public Node { /* ... */ }; // *(Note: This base class is conceptual. Pattern structures are defined in the EBNF and corresponding AST nodes are planned for implementation.)*\n\n} // namespace vyn
+```
+
+-   **`vyn::SourceLocation`**: Defined in `vyn/source_location.hpp`. Stores filename, line, and column.
+-   **`vyn::NodeType`**: Enum to identify the specific type of the node, reflecting the current C++ implementation.
+-   **`vyn::Node::loc`**: The source location of the node.
+-   **`vyn::Node::inferredTypeName`**: A string for type checking or code generation hints.
+-   **`vyn::Node::getType()`**: Returns the `NodeType` of the node.
+-   **`vyn::Node::accept(Visitor&)`**: Pure virtual method for the Visitor pattern.
+-   **`vyn::Node::toString()`**: Pure virtual method for debugging.
+-   **Implemented Base Classes**: `vyn::Expression`, `vyn::Statement`, `vyn::Declaration` (which inherits from `Statement`).
+-   **Planned Node Categories**: `PatternNode` represent categories of nodes that are part of the broader language design but are not yet implemented as specific base classes in C++ or have limited/different representation.
+
+## 3. AST Node Types (`NodeType` Enum)
+
+The `NodeType` enum, defined in `vyn/parser/ast.hpp`, provides a unique identifier for each type of AST node. This is crucial for type-safe downcasting and for visitors to determine the concrete type of a `Node*`.
+
+```cpp
 enum class NodeType {
     // Literals
     IDENTIFIER,
@@ -48,20 +69,28 @@ enum class NodeType {
     FLOAT_LITERAL,
     STRING_LITERAL,
     BOOLEAN_LITERAL,
-    ARRAY_LITERAL,    // Implemented
-    STRUCT_LITERAL,   // Was OBJECT_LITERAL, renamed for clarity with EBNF struct_literal
-    NIL_LITERAL,        // Represents a 'nil' literal
+    ARRAY_LITERAL,         // Formerly ARRAY_LITERAL_NODE
+    OBJECT_LITERAL,        // Formerly OBJECT_LITERAL_NODE
+    NIL_LITERAL,
 
     // Expressions
     UNARY_EXPRESSION,
     BINARY_EXPRESSION,
-    TERNARY_EXPRESSION, // New: For conditional_expression (?:)
     CALL_EXPRESSION,
+    CONSTRUCTION_EXPRESSION, // New: For TypeName(arguments)
+    ARRAY_INITIALIZATION_EXPRESSION, // New: For [Type; Size]()
     MEMBER_EXPRESSION,
     ASSIGNMENT_EXPRESSION,
-    IF_EXPRESSION,      // New: For if-expressions
-    RANGE_EXPRESSION,   // New: For range expressions (e.g., a..b)
-    BORROW_EXPR_NODE,   // Represents a borrow or view expression (e.g., borrow x, view y)
+    IF_EXPRESSION,      // New: For if-expressions - Check C++ impl status
+    RANGE_EXPRESSION,   // New: For range expressions (e.g., a..b) - Check C++ impl status
+    BORROW_EXPRESSION,     // Formerly BORROW_EXPRESSION_NODE
+    POINTER_DEREF_EXPRESSION, // Implemented
+    ADDR_OF_EXPRESSION,       // Implemented
+    FROM_INT_TO_LOC_EXPRESSION, // Implemented
+    ARRAY_ELEMENT_EXPRESSION, // Implemented
+    LOCATION_EXPRESSION,    // Implemented (from ast_extra.cpp)
+    LIST_COMPREHENSION,     // Implemented (from ast_extra.cpp)
+
 
     // Statements
     BLOCK_STATEMENT,
@@ -72,9 +101,10 @@ enum class NodeType {
     RETURN_STATEMENT,
     BREAK_STATEMENT,
     CONTINUE_STATEMENT,
-    THROW_STATEMENT,    // New: For throw statements
-    SCOPED_STATEMENT,   // New: For scoped blocks
-    PATTERN_ASSIGNMENT_STATEMENT, // New: For pattern-based assignments (e.g. let (a,b) = foo();)
+    THROW_STATEMENT,    // New: For throw statements - Check C++ impl status
+    SCOPED_STATEMENT,   // New: For scoped blocks - Check C++ impl status
+    PATTERN_ASSIGNMENT_STATEMENT, // New: For pattern-based assignments - Check C++ impl status
+    TRY_STATEMENT,      // Implemented
 
     // Declarations
     VARIABLE_DECLARATION,
@@ -87,607 +117,937 @@ enum class NodeType {
     IMPL_DECLARATION,
     ENUM_DECLARATION,
     ENUM_VARIANT,
-    GENERIC_PARAMETER,
-    TRAIT_DECLARATION,  // New: For trait definitions
-    METHOD_SIGNATURE,   // New: For method signatures within traits
+    GENERIC_PARAMETER,    // Formerly GENERIC_PARAM_NODE
+    TRAIT_DECLARATION,  // New: For trait definitions - Check C++ impl status
+    METHOD_SIGNATURE,   // New: For method signatures within traits - Check C++ impl status
+    TEMPLATE_DECLARATION, // Formerly TEMPLATE_DECLARATION_NODE
 
     // Other
-    TYPE_ANNOTATION,
+    TYPE_NODE,         // Represents type information (C++: TypeNode)
     MODULE
 };
-
-// Base AST Node (matches ast.hpp)
-class Node {
-public:
-    SourceLocation loc; // From vyn::source_location.hpp
-
-    Node(SourceLocation loc);
-    virtual ~Node() = default;
-    virtual NodeType getType() const = 0;
-    virtual std::string toString() const = 0;
-    virtual void accept(Visitor& visitor) = 0;
-    // Note: 'parent' pointer is not part of the current C++ Node class.
-};
-
-// Base Expression Node (matches ast.hpp)
-class Expression : public Node {
-public:
-    Expression(SourceLocation loc);
-};
-
-// Base Statement Node (matches ast.hpp)
-class Statement : public Node {
-public:
-    Statement(SourceLocation loc);
-};
-
-// Base Declaration Node (matches ast.hpp, Declarations are Statements)
-class Declaration : public Statement {
-public:
-    Declaration(SourceLocation loc);
-};
-
-// Conceptual base classes from original design
-// class TypeNode : public Node { /* ... */ }; // *(Note: This specific base class is conceptual; TypeAnnotation is the implemented type representation.)*
-// class PatternNode : public Node { /* ... */ }; // *(Note: This base class is conceptual. Pattern structures are defined in the EBNF and corresponding AST nodes are planned for implementation.)*
-
-} // namespace vyn
 ```
 
 -   **`vyn::SourceLocation`**: Defined in `vyn/source_location.hpp`. Stores filename, line, and column.
 -   **`vyn::NodeType`**: Enum to identify the specific type of the node, reflecting the current C++ implementation.
 -   **`vyn::Node::loc`**: The source location of the node.
+-   **`vyn::Node::inferredTypeName`**: A string for type checking or code generation hints.
 -   **`vyn::Node::getType()`**: Returns the `NodeType` of the node.
 -   **`vyn::Node::accept(Visitor&)`**: Pure virtual method for the Visitor pattern.
 -   **`vyn::Node::toString()`**: Pure virtual method for debugging.
 -   **Implemented Base Classes**: `vyn::Expression`, `vyn::Statement`, `vyn::Declaration` (which inherits from `Statement`).
--   **Planned Node Categories**: `TypeNode` and `PatternNode` represent categories of nodes that are part of the broader language design but are not yet implemented as specific base classes in C++ or have limited/different representation (e.g. `TypeAnnotation` for types).
+-   **Planned Node Categories**: `PatternNode` represent categories of nodes that are part of the broader language design but are not yet implemented as specific base classes in C++ or have limited/different representation.
 
-## 3. Path Node
-*(Note: The `path` syntax (e.g., `module::item` or `module.item`) is defined in the Vyn EBNF grammar. However, a dedicated `PathNode` AST element as described below is conceptual/planned and not yet implemented as a distinct node type in `ast.hpp`. Paths in expressions are typically represented using `Identifier` for single segments or `MemberExpression` for multiple segments, and in types via `TypeAnnotation`.)*
+## 3. AST Node Types (`NodeType` Enum)
 
-A `PathNode` represents a qualified name, such as `module::submodule::Item` or `module.submodule.Item`. It can be part of a Type, Expression, or Pattern.
-
--   **`PathNode : Node`** (Conceptual/Planned):
-    -   `std::vector<std::unique_ptr<IdentifierNode>> segments;`
-    -   `// bool is_absolute; // Optional: for paths like ::foo::bar (EBNF does not currently specify leading ::)`
-
-## 4. Expression Nodes
-
-Derived from `vyn::Expression : vyn::Node`.
-
--   **`vyn::Identifier : vyn::Expression`**: Represents an identifier. (Matches C++ `Identifier`)
-    -   `std::string name;`
--   **Literal Nodes**:
-    -   **`vyn::IntegerLiteral : vyn::Expression`**: (Matches C++ `IntegerLiteral`)
-        -   `int64_t value;`
-    -   **`vyn::FloatLiteral : vyn::Expression`**: (Matches C++ `FloatLiteral`)
-        -   `double value;`
-    -   **`vyn::StringLiteral : vyn::Expression`**: (Matches C++ `StringLiteral`)
-        -   `std::string value;`
-    -   **`vyn::BooleanLiteral : vyn::Expression`**: (Matches C++ `BooleanLiteral`)
-        -   `bool value;`
-    -   **`vyn::ArrayLiteral : vyn::Expression`**: Represents an array literal e.g. `[1, 2, 3]`. (Matches C++ `ArrayLiteral`)
-        -   `std::vector<std::unique_ptr<vyn::Expression>> elements;`
-    -   **`vyn::StructLiteralNode : vyn::Expression`**: Represents a struct literal, e.g., `MyType { field1: val1, field2 }` or `{ field1 = val1 }`. (Corresponds to EBNF `struct_literal`. The `NodeType` is `STRUCT_LITERAL`.)
-        -   `std::unique_ptr<vyn::TypeAnnotation> typePath; // Optional, e.g. MyStruct{...} from EBNF type_path?`
-        -   `std::vector<vyn::StructLiteralField> fields;`
-        -   **`vyn::StructLiteralField`** (Helper struct):
-            -   `vyn::SourceLocation loc;`
-            -   `std::unique_ptr<vyn::Identifier> name;`
-            -   `std::unique_ptr<vyn::Expression> value; // Optional. If null, it's shorthand (e.g. { name }). If present, it's from 'name: value' or 'name = value'.`
-    -   **`CharLiteralNode : ExprNode`**: *(Note: This node is planned and not yet implemented.)*
-        -   `char value;`
-    -   **`NullLiteralNode : ExprNode`**: *(Note: This node is planned and not yet implemented.)*
--   **`TupleLiteralNode : ExprNode`**: *(Note: This node is planned and not yet implemented.)*
-    -   `std::vector<std::unique_ptr<ExprNode>> elements;`
--   **`EnumLiteralNode : ExprNode`**: *(Note: This node is planned and not yet implemented.)*
-    -   `std::unique_ptr<PathNode> path;`
-    -   `std::vector<std::unique_ptr<ExprNode>> arguments;`
--   **Operator Nodes**:
-    -   **`vyn::UnaryExpression : vyn::Expression`**: (Matches C++ `UnaryExpression`)
-        -   `vyn::token::Token op;`
-        -   `std::unique_ptr<vyn::Expression> operand;`
-    -   **`vyn::BinaryExpression : vyn::Expression`**: (Matches C++ `BinaryExpression`)
-        -   `std::unique_ptr<vyn::Expression> left;`
-        -   `vyn::token::Token op;`
-        -   `std::unique_ptr<vyn::Expression> right;`
--   **`vyn::CallExpression : vyn::Expression`**: Represents a function or method call. (Matches C++ `CallExpression`)
-    -   `std::unique_ptr<vyn::Expression> callee;`
-    -   `std::vector<std::unique_ptr<vyn::Expression>> arguments;`
--   **`vyn::MemberExpression : vyn::Expression`**: Represents member access (dot or bracket). (Matches C++ `MemberExpression`)
-    -   `std::unique_ptr<vyn::Expression> object;`
-    -   `std::unique_ptr<vyn::Expression> property;` // Identifier or Expression if computed
-    -   `bool computed;` // True for `[]`, false for `.`
-    *(Note: This replaces `ArrayAccessNode` and `MemberAccessNode` from the original design with a unified C++ structure.)*
--   **`vyn::AssignmentExpression : vyn::Expression`**: Represents an assignment. (Matches C++ `AssignmentExpression`)
-    -   `std::unique_ptr<vyn::Expression> left;`
-    -   `vyn::token::Token op;` // e.g., `=`, `+=`
-    -   `std::unique_ptr<vyn::Expression> right;`
-
--   **`TernaryExpressionNode : vyn::Expression`**: Represents a ternary conditional expression (e.g., `condition ? then_expr : else_expr`). (Corresponds to EBNF `conditional_expression`. The `NodeType` is `TERNARY_EXPRESSION`.)
-    -   `std::unique_ptr<vyn::Expression> condition;`
-    -   `std::unique_ptr<vyn::Expression> thenExpression;`
-    -   `std::unique_ptr<vyn::Expression> elseExpression;`
-
--   **`RangeExpressionNode : vyn::Expression`**: Represents a range expression (e.g., `start .. end`). (Corresponds to EBNF `range_expression`. The `NodeType` is `RANGE_EXPRESSION`.)
-    -   `std::unique_ptr<vyn::Expression> start;`
-    -   `std::unique_ptr<vyn::Expression> end;`
-
--   **`AwaitExprNode : ExprNode`**: *(Note: This node is planned and not yet implemented.)*
-    -   `std::unique_ptr<ExprNode> expression;`
-
--   **`IfExpressionNode : vyn::Expression`**: Represents an if-expression that evaluates to a value (e.g., `if condition { value1 } else { value2 }`). (Corresponds to EBNF `if_expression`. The `NodeType` is `IF_EXPRESSION`.)
-    -   `std::unique_ptr<vyn::Expression> condition;`
-    -   `std::unique_ptr<vyn::BlockStatement> thenBlock; // Must evaluate to a value (e.g., by its last expression).`
-    -   `std::unique_ptr<vyn::Node> elseBranch; // Optional. Can be a vyn::BlockStatement or a vyn::IfExpressionNode. Both must evaluate to a value.`
-
--   **`ListComprehensionNode : ExprNode`**: *(Note: This node is planned and not yet implemented.)*
-    -   `std::unique_ptr<ExprNode> outputExpression;`
-    -   `std::unique_ptr<PatternNode> variablePattern;`
-    -   `std::unique_ptr<ExprNode> iterableExpression;`
-    -   `std::unique_ptr<ExprNode> filterCondition;`
-
--   **`MacroInvocationNode : ExprNode`**: *(Note: This node is planned and not yet implemented.)*
-    -   `std::unique_ptr<PathNode> path;`
-    -   `std::vector<std::unique_ptr<ExprNode>> arguments;`
-
-## 5. Statement Nodes
-
-Derived from `vyn::Statement : vyn::Node`.
-
--   **`vyn::ExpressionStatement : vyn::Statement`**: Wraps an expression. (Matches C++ `ExpressionStatement`)
-    -   `std::unique_ptr<vyn::Expression> expression;`
--   **`vyn::BlockStatement : vyn::Statement`**: Represents a block of statements. (Matches C++ `BlockStatement`)
-    -   `std::vector<std::unique_ptr<vyn::Statement>> body;`
--   **`vyn::VariableDeclaration : vyn::Declaration`**: Represents a variable declaration (e.g., `let x = 1;`, `var y: int;`, `let mut z = 2;`). (Matches C++ `VariableDeclaration`, updated for `let`/`var` and mutability from EBNF `variable_declaration`.)
-    -   `std::unique_ptr<vyn::Identifier> id; // For simple cases like 'let x = 1'. For pattern destructuring, this would be a PatternNode.`
-    -   `// std::unique_ptr<PatternNode> pattern; // Planned for destructuring, e.g., let (a, b) = ...`
-    -   `bool isMutable; // True if 'mut' keyword is present (e.g., 'let mut').`
-    -   `bool isLet; // True if 'let' keyword is used, false if 'var' (implies different semantics, e.g. const vs assignable).`
-    -   `std::unique_ptr<vyn::TypeAnnotation> typeAnnotation;` // Optional
-    -   `std::unique_ptr<vyn::Expression> init;` // Optional
--   **`vyn::IfStatement : vyn::Statement`**: Represents an if-else statement. (Matches C++ `IfStatement`)
-    -   `std::unique_ptr<vyn::Expression> test;`
-    -   `std::unique_ptr<vyn::Statement> consequent;`
-    -   `std::unique_ptr<vyn::Statement> alternate;` // Optional
--   **`vyn::WhileStatement : vyn::Statement`**: Represents a while loop. (Matches C++ `WhileStatement`)
-    -   `std::unique_ptr<vyn::Expression> test;`
-    -   `std::unique_ptr<vyn::Statement> body;`
--   **`vyn::ForStatement : vyn::Statement`**: Represents a C-style for loop. (Matches C++ `ForStatement`)
-    -   `std::unique_ptr<vyn::Node> init;`   // VariableDeclaration or ExpressionStatement or nullptr
-    -   `std::unique_ptr<vyn::Expression> test;`   // Expression or nullptr
-    -   `std::unique_ptr<vyn::Expression> update;` // Expression or nullptr
-    -   `std::unique_ptr<vyn::Statement> body;`
-    *(Note: The EBNF also includes `for_in_statement` (e.g., `for x in iterable {}`), which would require a different AST node, e.g., `ForInStatementNode`, likely using a `PatternNode` for `x`.)*
--   **`vyn::ReturnStatement : vyn::Statement`**: Represents a return statement. (Matches C++ `ReturnStatement`)
-    -   `std::unique_ptr<vyn::Expression> argument;` // Optional
--   **`vyn::BreakStatement : vyn::Statement`**: Represents a break statement. (Matches C++ `BreakStatement`)
--   **`vyn::ContinueStatement : vyn::Statement`**: Represents a continue statement. (Matches C++ `ContinueStatement`)
-
--   **`PatternAssignmentStatementNode : vyn::Statement`**: Represents a pattern-based assignment (e.g., `(a, b) = expression;`). (Corresponds to EBNF `pattern_assignment_statement`. The `NodeType` is `PATTERN_ASSIGNMENT_STATEMENT`.)
-    -   `std::unique_ptr<PatternNode> pattern; // Planned PatternNode structure`
-    -   `std::unique_ptr<vyn::Expression> expression;`
-
--   **`MatchStmtNode : StmtNode`**: *(Note: This node and its helpers are planned and not yet implemented.)*
-    -   `std::unique_ptr<ExprNode> expression;`
-    -   `std::vector<std::unique_ptr<MatchCaseNode>> cases;`
-    -   **`MatchCaseNode : Node`** (Helper):
-        -   `std::unique_ptr<PatternNode> pattern;`
-        -   `std::unique_ptr<ExprNode> guard;`
-        -   `std::unique_ptr<BlockStmtNode> body;`
-
--   **`ThrowStatementNode : vyn::Statement`**: Represents a throw statement (e.g., `throw MyException();`). (Corresponds to EBNF `throw_statement`. The `NodeType` is `THROW_STATEMENT`.)
-    -   `std::unique_ptr<vyn::Expression> expression;`
-
--   **`TryStmtNode : StmtNode`**: *(Note: This node and its helpers are planned and not yet implemented. The EBNF `try_statement` has a specific structure for `catch_clause`.)*
-    -   `std::unique_ptr<BlockStmtNode> tryBlock;`
-    -   `std::vector<CatchClauseNode> catchClauses;`
-    -   `std::unique_ptr<BlockStmtNode> finallyBlock;` // Optional
-    -   **`CatchClauseNode : Node`** (Helper, updated to match EBNF `catch_clause`):
-        -   `std::unique_ptr<vyn::Identifier> variableName; // e.g., 'e' in 'catch e: ExceptionType'`
-        -   `std::unique_ptr<vyn::TypeAnnotation> exceptionType; // Optional, e.g., 'ExceptionType'`
-        -   `std::unique_ptr<vyn::BlockStatement> body;`
-
--   **`DeferStmtNode : StmtNode`**: *(Note: This node is planned and not yet implemented.)*
-    -   `std::unique_ptr<ExprNode> expression;`
-
--   **`ScopedStatementNode : vyn::Statement`**: Represents a scoped block (e.g., `scoped { ... }`). (Corresponds to EBNF `scoped_statement`. The `NodeType` is `SCOPED_STATEMENT`.)
-    -   `std::unique_ptr<vyn::BlockStatement> body;`
-
-## 6. Declaration Nodes
-
-Derived from `vyn::Declaration : vyn::Statement`.
-
-*(Note: Many declarations in the EBNF can be preceded by `attributes?` and `visibility?`. These are considered planned features for the AST nodes unless specified otherwise, and dedicated `AttributeNode` and visibility flags would be added in the future.)*
-
--   **`vyn::GenericParamNode : vyn::Node`**: Represents a generic parameter (e.g., `T`, `const N: int`). (Matches C++ `GenericParamNode`, updated for const generics from EBNF `generic_parameter`.)
-    -   `std::unique_ptr<vyn::Identifier> name;`
-    -   `bool isConst; // New: True for const generic parameters (e.g., "const N: int").`
-    -   `std::unique_ptr<vyn::TypeAnnotation> constType; // New: Type for const generic parameters (e.g., "int" in "const N: int"). Null if not a const generic.`
-    -   `std::vector<std::unique_ptr<vyn::TypeAnnotation>> bounds; // For type parameters (e.g., "T: MyTrait").`
-    *(Note: The C++ version might be simpler; this reflects full EBNF capability.)*
-
--   **`vyn::FunctionParameter`** (Struct used in function-like declarations, matches C++ `FunctionParameter`, extended for EBNF `parameter`):
-    -   `vyn::SourceLocation loc;`
-    -   `std::unique_ptr<vyn::Identifier> name; // Represents IDENTIFIER in 'pattern_or_identifier'.`
-    -   `// std::unique_ptr<PatternNode> pattern; // Planned: To support 'pattern' in 'pattern_or_identifier'.`
-    -   `std::unique_ptr<vyn::TypeAnnotation> typeAnnotation; // Mandatory in EBNF parameter.`
-    -   `// std::unique_ptr<vyn::Expression> defaultValue; // Planned: For default parameter values.`
-    *(Note: Original `ParamNode` with `isMut`, `isRef` is part of a more detailed planned design not directly in current EBNF parameter structure.)*
-
--   **`vyn::VariableDeclaration : vyn::Declaration`**: Represents a variable declaration (e.g., `let x = 1;`, `var y: int;`, `let mut z = 2;`). (Matches C++ `VariableDeclaration`, updated for `let`/`var`, mutability, and planned pattern support from EBNF `variable_declaration`.)
-    -   `std::unique_ptr<vyn::Identifier> identifier; // Represents the IDENTIFIER in 'pattern_or_identifier' when not using a pattern.`
-    -   `// std::unique_ptr<PatternNode> pattern; // Planned: To support 'pattern' in 'pattern_or_identifier' for destructuring.`
-    -   `bool isLet; // True if 'let' keyword is used.`
-    -   `bool isMutable; // True if 'mut' keyword is present (e.g., 'let mut'). 'var' also implies mutability.`
-    -   `std::unique_ptr<vyn::TypeAnnotation> typeAnnotation;` // Optional
-    -   `std::unique_ptr<vyn::Expression> init;` // Optional
-    *(Note: Pattern-based destructuring is a planned feature. The 'identifier' field is used for simple variable declarations.)*
-
--   **`vyn::FunctionDeclaration : vyn::Declaration`**: Represents a free function declaration. (Matches C++ `FunctionDeclaration`, updated for EBNF `function_declaration`.)
-    -   `std::unique_ptr<vyn::Identifier> id;`
-    -   `std::vector<std::unique_ptr<vyn::GenericParamNode>> genericParams; // New`
-    -   `std::vector<vyn::FunctionParameter> params;`
-    -   `std::unique_ptr<vyn::TypeAnnotation> returnType;` // Optional
-    -   `std::vector<std::unique_ptr<vyn::TypeAnnotation>> throwsClause; // New: For 'throws' annotations.`
-    -   `std::variant<std::unique_ptr<vyn::BlockStatement>, std::unique_ptr<vyn::Expression>> body; // New: Supports block or '=> expression' body.`
-    -   `bool isAsync; // Existing: from C++ version. (Note: EBNF might handle via attributes).`
-
--   **`MethodDeclarationNode : vyn::Declaration`** (New): Represents a method declaration within a class or impl block. (Corresponds to EBNF `method_declaration`.)
-    -   `std::unique_ptr<vyn::Identifier> id;`
-    -   `std::vector<std::unique_ptr<vyn::GenericParamNode>> genericParams;`
-    -   `bool hasSelfParam; // True if the first parameter is 'self'. Details of 'self' (e.g. mut, ref) are part of FunctionParameter.`
-    -   `std::vector<vyn::FunctionParameter> params; // Parameters excluding 'self' if hasSelfParam is true, or all params if false.`
-    -   `std::unique_ptr<vyn::TypeAnnotation> returnType;` // Optional
-    -   `std::vector<std::unique_ptr<vyn::TypeAnnotation>> throwsClause;`
-    -   `std::variant<std::unique_ptr<vyn::BlockStatement>, std::unique_ptr<vyn::Expression>> body; // Supports block or '=> expression' body.`
-
--   **`ConstructorDeclarationNode : vyn::Declaration`** (New): Represents a constructor declaration. (Corresponds to EBNF `constructor_declaration`.)
-    -   `std::vector<std::unique_ptr<vyn::GenericParamNode>> genericParams;`
-    -   `std::vector<vyn::FunctionParameter> params;`
-    -   `std::vector<std::unique_ptr<vyn::TypeAnnotation>> throwsClause;`
-    -   `std::variant<std::unique_ptr<vyn::BlockStatement>, std::unique_ptr<vyn::Expression>> body; // Supports block or '=> expression' body.`
-
--   **`vyn::StructDeclaration : vyn::Declaration`**: Represents a struct declaration. (Matches C++ `StructDeclaration`, updated for EBNF `struct_declaration`.)
-    -   `std::unique_ptr<vyn::Identifier> name;`
-    -   `std::vector<std::unique_ptr<vyn::GenericParamNode>> genericParams;`
-    -   `std::variant< // New: Supports both struct and tuple-like fields.
-            std::vector<std::unique_ptr<vyn::FieldDeclaration>>,    // For regular struct fields: struct Name { field: Type }
-            std::vector<std::unique_ptr<vyn::TypeAnnotation>>       // For tuple struct fields: struct Name(Type1, Type2)
-        > fieldLayout;`
-
--   **`vyn::FieldDeclaration : vyn::Declaration`**: Represents a field declaration within a struct or class. (Matches C++ `FieldDeclaration`, aligns with EBNF `field_declaration`.)
-    -   `std::unique_ptr<vyn::Identifier> name;`
-    -   `std::unique_ptr<vyn::TypeAnnotation> typeAnnotation;` // Mandatory
-    -   `std::unique_ptr<vyn::Expression> initializer;`     // Optional (New from EBNF)
-    -   `// bool isMutable; // Note: EBNF field_declaration doesn't specify mutability. Mutability is usually on the instance or via 'let mut' for local bindings.`
-
--   **`vyn::ClassDeclaration : vyn::Declaration`**: Represents a class declaration. (Matches C++ `ClassDeclaration`, updated for EBNF `class_declaration`.)
-    -   `std::unique_ptr<vyn::Identifier> name;`
-    -   `std::vector<std::unique_ptr<vyn::GenericParamNode>> genericParams;`
-    -   `std::unique_ptr<vyn::TypeAnnotation> extendsClause; // New: For 'extends BaseClass'.`
-    -   `std::vector<std::unique_ptr<vyn::TypeAnnotation>> implementsClause; // New: For 'implements Interface1, Interface2'.`
-    -   `std::vector<std::unique_ptr<vyn::Declaration>> members; // Updated: Can be FieldDeclaration, MethodDeclarationNode, ConstructorDeclarationNode.`
-
--   **`TraitDeclarationNode : vyn::Declaration`** (New): Represents a trait declaration. (Corresponds to EBNF `trait_declaration`.)
-    -   `std::unique_ptr<vyn::Identifier> name;`
-    -   `std::vector<std::unique_ptr<vyn::GenericParamNode>> genericParams;`
-    -   `std::vector<std::unique_ptr<vyn::Declaration>> members; // Can be MethodSignatureNode, TypeAliasDeclarationNode.`
-
--   **`MethodSignatureNode : vyn::Declaration`** (New): Represents a method signature within a trait. (Corresponds to EBNF `method_signature`.)
-    -   `std::unique_ptr<vyn::Identifier> id;`
-    -   `std::vector<std::unique_ptr<vyn::GenericParamNode>> genericParams;`
-    -   `bool hasSelfParam; // True if 'self' is a parameter.`
-    -   `std::vector<vyn::FunctionParameter> params; // Parameters excluding 'self' if hasSelfParam is true.`
-    -   `std::unique_ptr<vyn::TypeAnnotation> returnType;` // Optional
-    -   `std::vector<std::unique_ptr<vyn::TypeAnnotation>> throwsClause;` // Optional
-
--   **`vyn::ImplDeclaration : vyn::Declaration`**: Represents an implementation block. (Matches C++ `ImplDeclaration`, updated for EBNF `impl_declaration`.)
-    -   `std::vector<std::unique_ptr<vyn::GenericParamNode>> genericParams;`
-    -   `std::unique_ptr<vyn::TypeAnnotation> selfType; // The type being implemented.`
-    -   `std::unique_ptr<vyn::TypeAnnotation> traitType; // Optional: The trait being implemented for selfType.`
-    -   `std::vector<std::unique_ptr<vyn::Declaration>> members; // Updated: Can be MethodDeclarationNode, ConstructorDeclarationNode, TypeAliasDeclarationNode.`
-
--   **`vyn::EnumVariantNode : vyn::Declaration`**: Represents an enum variant. (Matches C++ `EnumVariantNode`, updated for EBNF `enum_variant`.)
-    -   `std::unique_ptr<vyn::Identifier> name;`
-    -   `std::variant< // New: Supports simple, tuple-like, and struct-like variants.
-            std::monostate,                                         // For simple variants: VariantName
-            std::vector<std::unique_ptr<vyn::TypeAnnotation>>,    // For tuple variants: VariantName(Type1, Type2)
-            std::vector<std::unique_ptr<vyn::FieldDeclaration>>   // For struct variants: VariantName { field1: Type1 }
-        > payload;`
-    -   `std::unique_ptr<vyn::Expression> value; // New: Optional discriminant value (e.g., VariantName = 123).`
-
--   **`vyn::EnumDeclaration : vyn::Declaration`**: Represents an enum declaration. (Matches C++ `EnumDeclaration`, aligns with EBNF `enum_declaration`.)
-    -   `std::unique_ptr<vyn::Identifier> name;`
-    -   `std::vector<std::unique_ptr<vyn::GenericParamNode>> genericParams;`
-    -   `std::vector<std::unique_ptr<vyn::EnumVariantNode>> variants;`
-
--   **`vyn::TypeAliasDeclaration : vyn::Declaration`**: Represents a type alias. (Matches C++ `TypeAliasDeclaration`, updated for EBNF `type_alias_declaration`.)
-    -   `std::unique_ptr<vyn::Identifier> name;`
-    -   `std::vector<std::unique_ptr<vyn::GenericParamNode>> genericParams; // New`
-    -   `std::unique_ptr<vyn::TypeAnnotation> typeAnnotation; // The type being aliased.`
-
--   **`vyn::ImportDeclaration : vyn::Declaration`**: Represents an import declaration. (Matches C++ `ImportDeclaration`.)
-    -   `std::unique_ptr<vyn::StringLiteral> source; // Path to the module, typically a string literal.`
-    -   `std::vector<vyn::ImportSpecifier> specifiers; // For named imports: { name1, name2 as alias }`
-    -   `std::unique_ptr<vyn::Identifier> defaultImport; // Optional: For default import (ES6-style, Vyn EBNF is different).`
-    -   `std::unique_ptr<vyn::Identifier> namespaceImport; // Optional: For namespace import (ES6-style, Vyn EBNF is different).`
-    -   **`vyn::ImportSpecifier`** (Helper struct, matches C++):
-        -   `vyn::SourceLocation loc;`
-        -   `std::unique_ptr<vyn::Identifier> importedName;`
-        -   `std::unique_ptr<vyn::Identifier> localName;` // Optional alias
-    *(Note: The current C++ structure is ES6-like. The Vyn EBNF `import_declaration` also supports `import path ("as" IDENTIFIER)?` and `import { ... } from path_or_string`. This AST node primarily covers the latter. The simpler form might be represented differently or by specific usage of these fields.)*
-
--   **`GlobalVarDeclNode : DeclNode`**: *(Note: This specific node is planned. Global variables would likely use `VariableDeclaration` at the module level, but specific semantics for `const` globals might evolve.)*
-    -   `std::unique_ptr<PatternNode> pattern;`
-    -   `std::unique_ptr<TypeNode> typeAnnotation;`
-    -   `std::unique_ptr<ExprNode> initializer;`
-    -   `bool isMutable;`
-    -   `bool isConst;`
-
--   **`SmuggleDeclNode : DeclNode`**: *(Note: This node is planned and not yet implemented.)*
-    -   `std::unique_ptr<PathNode> path;`
-
-## 7. Type Representation: `TypeNode`
-
-In Vyn, types are represented in the AST by `TypeNode` (NodeType: `TYPE_NODE`). This node is crucial for static type checking and code generation, appearing in variable declarations, function signatures, struct/class fields, generic parameters, and type casts.
-
-### Enums for `TypeNode`
-
-`TypeNode` utilizes several enums to specify the characteristics of a type:
-
-#### `TypeCategory`
-Defines the fundamental category of the type.
-```vyn_pseudo_cpp
-enum class TypeCategory {
-    BASIC,            // Basic built-in type (e.g., Int, Float, Bool, String, Void)
-    STRUCT,           // User-defined struct type
-    CLASS,            // User-defined class type
-    ENUM,             // User-defined enum type
-    FUNCTION,         // Function type (e.g., fn(Int) -> Bool)
-    GENERIC_PARAM,    // A generic type parameter (e.g., T in fn foo<T>(p: T))
-    POINTER,          // Raw pointer type (e.g., ptr<T>)
-    OWNERSHIP_WRAPPED // Ownership-qualified type (e.g., my<T>, our<T>, their<T>)
-};
-```
-
-#### `OwnershipKind`
-Defines the ownership semantics for `OWNERSHIP_WRAPPED` types.
-```vyn_pseudo_cpp
-enum class OwnershipKind {
-    MY,     // Unique ownership (my<T>)
-    OUR,    // Shared ownership (our<T>)
-    THEIR   // Borrowed reference (their<T>)
-    // PTR is handled by TypeCategory::POINTER
-};
-```
-
-#### `BorrowKind`
-Defines the mutability of a `THEIR` borrow. This enum is also used by `BorrowExprNode`.
-```vyn_pseudo_cpp
-enum class BorrowKind {
-    MUTABLE, // Mutable borrow (e.g., their<T>, created by `borrow`)
-    CONST    // Immutable/constant borrow (e.g., their<T const>, created by `view`)
-};
-```
-
-### `TypeNode` Structure
-
-A `TypeNode` has the following fields:
-
-*   `category: TypeCategory`: The category of this type.
-*   `isConst: bool`: Indicates if the underlying data is `const` (e.g., for `T const` in `my<T const>`). For `their<T const>`, `borrowKind` is used.
-*   `name: std::string`: The name of the type.
-    *   For `BASIC`: e.g., "Int", "String".
-    *   For `STRUCT`, `CLASS`, `ENUM`, `GENERIC_PARAM`: The identifier of the type/parameter.
-*   `genericArgs: std::vector<TypeNode*>`: A list of `TypeNode`s representing generic arguments (e.g., for `Map<String, Int>`).
-*   `returnType: TypeNode*`: The return type, used when `category` is `FUNCTION`.
-*   `paramTypes: std::vector<TypeNode*>`: A list of parameter types, used when `category` is `FUNCTION`.
-*   `ownershipKind: OwnershipKind`: The kind of ownership, used when `category` is `OWNERSHIP_WRAPPED`.
-*   `borrowKind: BorrowKind`: The kind of borrow, used when `category` is `OWNERSHIP_WRAPPED` and `ownershipKind` is `THEIR`.
-*   `wrappedType: TypeNode*`: The `TypeNode` being wrapped.
-    *   For `POINTER`: The type pointed to (e.g., `T` in `ptr<T>`).
-    *   For `OWNERSHIP_WRAPPED`: The underlying type (e.g., `T` in `my<T>`).
-
-**Example Mappings:**
-*   `Int`: `TypeNode{category=BASIC, name="Int"}`
-*   `my<String>`: `TypeNode{category=OWNERSHIP_WRAPPED, ownershipKind=MY, wrappedType=TypeNode{category=BASIC, name="String"}}`
-*   `their<Foo const>`: `TypeNode{category=OWNERSHIP_WRAPPED, ownershipKind=THEIR, borrowKind=CONST, wrappedType=TypeNode{category=STRUCT, name="Foo"}}` (assuming Foo is a struct)
-*   `ptr<T>` (where T is generic): `TypeNode{category=POINTER, wrappedType=TypeNode{category=GENERIC_PARAM, name="T"}}`
-*   `fn(Int) -> Bool`: `TypeNode{category=FUNCTION, paramTypes=[TypeNode{Int}], returnType=TypeNode{Bool}}`
-
-## 8. Pattern Nodes
-*(Note: Pattern nodes and destructuring features are defined in the EBNF (e.g., `pattern`, `struct_pattern_field`, `tuple_pattern_element`) but are mostly planned for full AST implementation. The `toString()` in `ast.cpp` had commented-out code for `IdentifierPatternNode`, indicating early thought but no current C++ implementation of these specific nodes.)*
-
-Derived from `PatternNode : Node` (conceptual base class). Pattern nodes are used in variable declarations (e.g., `let (a, b) = ...`), `pattern_assignment_statement`, for-in loops (planned), and match expressions (planned).
-
--   **`IdentifierPatternNode : PatternNode`**: Binds a value to an identifier, e.g., `x` in `let x = ...` or `(x, ...)`.
-    -   `std::unique_ptr<vyn::Identifier> identifier;`
-    -   `bool isMutable; // True if the binding is mutable (e.g. 'mut x' in a pattern).`
-    -   `bool isReference; // True if '&' prefix is used (e.g. '&x').`
--   **`LiteralPatternNode : PatternNode`**: Matches a specific literal value.
-    -   `std::unique_ptr<vyn::Expression> literal;` (e.g., `IntegerLiteral`, `StringLiteral`)
--   **`WildcardPatternNode : PatternNode`**: `_`, matches anything without binding.
--   **`TuplePatternNode : PatternNode`**: Matches and destructures a tuple, e.g., `(a, _, c)`.
-    -   `std::vector<std::unique_ptr<PatternNode>> elements;`
--   **`EnumVariantPatternNode : PatternNode`**: Matches and destructures an enum variant, e.g., `Option::Some(x)` or `MyEnum.Variant { field }`.
-    -   `std::unique_ptr<PathNode> path;` (For `Option::Some` or `MyEnum.Variant`)
-    -   `std::variant< // Supports tuple-like and struct-like variant patterns
-            std::vector<std::unique_ptr<PatternNode>>,    // For tuple-like arguments: (x, y)
-            std::vector<StructPatternField>             // For struct-like fields: { field1: p1, field2 }
-        > argumentsOrFields;`
-    -   `// bool has_rest_pattern; // For .. syntax in tuple-like part`
--   **`StructPatternNode : PatternNode`**: Matches and destructures a struct, e.g., `Point { x: 0, y, ..rest }`.
-    -   `std::unique_ptr<PathNode> structPath;` // Name/path of the struct (e.g., "Point" or "my::Point").
-    -   `std::vector<StructPatternField> fields;`
-    -   `bool hasRestPattern; // For `..` or `..rest_identifier` syntax (EBNF `pattern_rest`).`
-    -   `std::unique_ptr<vyn::Identifier> restIdentifier; // Optional identifier for the rest pattern.`
-    -   **`StructPatternField`** (Helper struct, not an AST `Node`):
-        -   `vyn::SourceLocation location;`
-        -   `std::unique_ptr<vyn::Identifier> fieldName;`
-        -   `std::unique_ptr<PatternNode> pattern;` // Optional: if null, shorthand for fieldName: fieldName.
-
-## 9. Module Node (`vyn::Module`)
-
-The `vyn::Module` node is the root of the AST for a single source file. It inherits from `vyn::Node`.
-
--   **`vyn::Module : vyn::Node`** (Matches C++ `Module`)
-    -   Implicitly has `vyn::SourceLocation loc;` (inherited from `vyn::Node`), which includes file path information.
-    -   `std::vector<std::unique_ptr<vyn::Statement>> body;` (Stores a sequence of statements, including declarations. This aligns with the EBNF where a `module` consists of `module_item`s, and `module_item` can be a `declaration`, `statement`, or `import_declaration`. Since `Declaration` (which includes `ImportDeclaration`) inherits from `Statement`, this structure accommodates the EBNF.)
-
-## 10. AST Traversal and Manipulation (Visitor)
-
-The Visitor pattern is used for operating on the AST. Each concrete AST node has an `accept(Visitor& visitor)` method.
+The `NodeType` enum, defined in `vyn/parser/ast.hpp`, provides a unique identifier for each type of AST node. This is crucial for type-safe downcasting and for visitors to determine the concrete type of a `Node*`.
 
 ```cpp
-// Visitor interface, updated to reflect AST changes based on EBNF
-namespace vyn { // Corrected namespace
+enum class NodeType {
+    // Literals
+    IDENTIFIER,
+    INTEGER_LITERAL,
+    FLOAT_LITERAL,
+    STRING_LITERAL,
+    BOOLEAN_LITERAL,
+    ARRAY_LITERAL,         // Formerly ARRAY_LITERAL_NODE
+    OBJECT_LITERAL,        // Formerly OBJECT_LITERAL_NODE
+    NIL_LITERAL,
 
-class Visitor {
-public:
-    virtual ~Visitor() = default;
+    // Expressions
+    UNARY_EXPRESSION,
+    BINARY_EXPRESSION,
+    CALL_EXPRESSION,
+    CONSTRUCTION_EXPRESSION, // New: For TypeName(arguments)
+    ARRAY_INITIALIZATION_EXPRESSION, // New: For [Type; Size]()
+    MEMBER_EXPRESSION,
+    ASSIGNMENT_EXPRESSION,
+    IF_EXPRESSION,      // New: For if-expressions - Check C++ impl status
+    RANGE_EXPRESSION,   // New: For range expressions (e.g., a..b) - Check C++ impl status
+    BORROW_EXPRESSION,     // Formerly BORROW_EXPRESSION_NODE
+    POINTER_DEREF_EXPRESSION, // Implemented
+    ADDR_OF_EXPRESSION,       // Implemented
+    FROM_INT_TO_LOC_EXPRESSION, // Implemented
+    ARRAY_ELEMENT_EXPRESSION, // Implemented
+    LOCATION_EXPRESSION,    // Implemented (from ast_extra.cpp)
+    LIST_COMPREHENSION,     // Implemented (from ast_extra.cpp)
 
-    // Literals (Reflects current and EBNF-driven AST nodes)
-    virtual void visit(class Identifier* node) = 0;
-    virtual void visit(class IntegerLiteral* node) = 0;
-    virtual void visit(class FloatLiteral* node) = 0;
-    virtual void visit(class StringLiteral* node) = 0;
-    virtual void visit(class BooleanLiteral* node) = 0;
-    virtual void visit(class ArrayLiteral* node) = 0;
-    virtual void visit(class StructLiteralNode* node) = 0; // Was ObjectLiteral, updated for EBNF struct_literal
-    virtual void visit(class NilLiteral* node) = 0;
 
-    // Expressions (Reflects current and EBNF-driven AST nodes)
-    virtual void visit(class UnaryExpression* node) = 0;
-    virtual void visit(class BinaryExpression* node) = 0;
-    virtual void visit(class TernaryExpressionNode* node) = 0; // New: For conditional_expression (?:)
-    virtual void visit(class CallExpression* node) = 0;
-    virtual void visit(class MemberExpression* node) = 0;
-    virtual void visit(class AssignmentExpression* node) = 0;
-    virtual void visit(class IfExpressionNode* node) = 0;      // New: For if-expressions
-    virtual void visit(class RangeExpressionNode* node) = 0;   // New: For range expressions (e.g., a..b)
-    virtual void visit(class BorrowExprNode* node) = 0;
+    // Statements
+    BLOCK_STATEMENT,
+    EXPRESSION_STATEMENT,
+    IF_STATEMENT,
+    FOR_STATEMENT,
+    WHILE_STATEMENT,
+    RETURN_STATEMENT,
+    BREAK_STATEMENT,
+    CONTINUE_STATEMENT,
+    THROW_STATEMENT,    // New: For throw statements - Check C++ impl status
+    SCOPED_STATEMENT,   // New: For scoped blocks - Check C++ impl status
+    PATTERN_ASSIGNMENT_STATEMENT, // New: For pattern-based assignments - Check C++ impl status
+    TRY_STATEMENT,      // Implemented
 
-    // Statements (Reflects current and EBNF-driven AST nodes)
-    virtual void visit(class BlockStatement* node) = 0;
-    virtual void visit(class ExpressionStatement* node) = 0;
-    virtual void visit(class IfStatement* node) = 0;
-    virtual void visit(class ForStatement* node) = 0;
-    virtual void visit(class WhileStatement* node) = 0;
-    virtual void visit(class ReturnStatement* node) = 0;
-    virtual void visit(class BreakStatement* node) = 0;
-    virtual void visit(class ContinueStatement* node) = 0;
-    virtual void visit(class ThrowStatementNode* node) = 0;    // New: For throw statements
-    virtual void visit(class ScopedStatementNode* node) = 0;   // New: For scoped blocks
-    virtual void visit(class PatternAssignmentStatementNode* node) = 0; // New: For pattern-based assignments
+    // Declarations
+    VARIABLE_DECLARATION,
+    FUNCTION_DECLARATION,
+    TYPE_ALIAS_DECLARATION,
+    IMPORT_DECLARATION,
+    STRUCT_DECLARATION,
+    CLASS_DECLARATION,  // Note: May be superseded or refined by traits/impls
+    FIELD_DECLARATION,
+    IMPL_DECLARATION,
+    ENUM_DECLARATION,
+    ENUM_VARIANT,
+    GENERIC_PARAMETER,    // Formerly GENERIC_PARAM_NODE
+    TRAIT_DECLARATION,  // New: For trait definitions - Check C++ impl status
+    METHOD_SIGNATURE,   // New: For method signatures within traits - Check C++ impl status
+    TEMPLATE_DECLARATION, // Formerly TEMPLATE_DECLARATION_NODE
 
-    // Declarations (Reflects current and EBNF-driven AST nodes)
-    virtual void visit(class VariableDeclaration* node) = 0;
-    virtual void visit(class FunctionDeclaration* node) = 0;
-    virtual void visit(class MethodDeclarationNode* node) = 0; // New: For methods in classes/impls
-    virtual void visit(class ConstructorDeclarationNode* node) = 0; // New: For constructors
-    virtual void visit(class TypeAliasDeclaration* node) = 0;
-    virtual void visit(class ImportDeclaration* node) = 0;
-    virtual void visit(class StructDeclaration* node) = 0;
-    virtual void visit(class ClassDeclaration* node) = 0; // Note: May be superseded or refined by traits/impls
-    virtual void visit(class FieldDeclaration* node) = 0;
-    virtual void visit(class TraitDeclarationNode* node) = 0;  // New: For trait definitions
-    virtual void visit(class MethodSignatureNode* node) = 0;   // New: For method signatures within traits
-    virtual void visit(class ImplDeclaration* node) = 0;
-    virtual void visit(class EnumDeclaration* node) = 0;
-    virtual void visit(class EnumVariantNode* node) = 0;
-    virtual void visit(class GenericParamNode* node) = 0;
-    
-    // Other (Matches ast.hpp)
-    virtual void visit(class TypeAnnotation* node) = 0;
-    virtual void visit(class Module* node) = 0;
-
-    // --- Planned Visitor Methods (Not yet in ast.hpp Visitor or correspond to planned AST Nodes) ---
-    // These methods correspond to AST nodes that are part of the design
-    // but not yet fully implemented in C++ or its Visitor interface, or are helper nodes.
-
-    // Planned Literals & Expressions:
-    // virtual void visit(class PathNode* node) = 0; // Planned
-    // virtual void visit(class CharLiteralNode* node) = 0; // Planned
-    // virtual void visit(class NullLiteralNode* node) = 0; // Planned
-    // virtual void visit(class TupleLiteralNode* node) = 0; // Planned
-    // virtual void visit(class EnumLiteralNode* node) = 0; // Planned
-    // virtual void visit(class AwaitExprNode* node) = 0; // Planned
-    // virtual void visit(class ListComprehensionNode* node) = 0; // Planned
-    // virtual void visit(class MacroInvocationNode* node) = 0; // Planned
-
-    // Planned Statements:
-    // virtual void visit(class MatchStmtNode* node) = 0; // Planned
-    // virtual void visit(class MatchCaseNode* node) = 0; // Planned (helper for MatchStmtNode)
-    // virtual void visit(class TryStmtNode* node) = 0; // Planned
-    // virtual void visit(class CatchClauseNode* node) = 0; // Planned (helper for TryStmtNode, if it's a visitable Node)
-    // virtual void visit(class DeferStmtNode* node) = 0; // Planned
-    // virtual void visit(class ForInStatementNode* node) = 0; // Planned (for 'for item in iterable')
-
-    // Planned Declarations:
-    // virtual void visit(class GlobalVarDeclNode* node) = 0; // Planned (VariableDeclaration at module scope covers some aspects)
-    // virtual void visit(class SmuggleDeclNode* node) = 0; // Planned
-    // Note: vyn::FunctionParameter is a struct, not typically visited directly. vyn::GenericParamNode is visited.
-
-    // Planned Types (Note: vyn::TypeAnnotation is the primary implemented type representation, but specific nodes might be added):
-    // virtual void visit(class IdentifierTypeNode* node) = 0; // Planned (Conceptually covered by TypeAnnotation)
-    // virtual void visit(class ArrayTypeNode* node) = 0; // Planned (Conceptually covered by TypeAnnotation)
-    // virtual void visit(class PointerTypeNode* node) = 0; // Planned
-    // virtual void visit(class OptionalTypeNode* node) = 0; // Planned
-    // virtual void visit(class ReferenceTypeNode* node) = 0; // Planned
-    // virtual void visit(class FunctionTypeNode* node) = 0; // Planned (Conceptually covered by TypeAnnotation)
-    // virtual void visit(class GenericInstanceTypeNode* node) = 0; // Planned (Conceptually covered by TypeAnnotation)
-
-    // Planned Patterns:
-    // virtual void visit(class IdentifierPatternNode* node) = 0; // Planned
-    // virtual void visit(class LiteralPatternNode* node) = 0; // Planned
-    // virtual void visit(class WildcardPatternNode* node) = 0; // Planned
-    // virtual void visit(class TuplePatternNode* node) = 0; // Planned
-    // virtual void visit(class EnumVariantPatternNode* node) = 0; // Planned
-    // virtual void visit(class StructPatternNode* node) = 0; // Planned
+    // Other
+    TYPE_NODE,         // Represents type information (C++: TypeNode)
+    MODULE
 };
-
-// Each concrete Node type implements:
-// void accept(Visitor& visitor) override { visitor.visit(this); }
-// (where 'this' is cast to the concrete type for dispatch)
-
-} // namespace vyn
 ```
 
-## 11. Integration with Existing Parser
+-   **`vyn::SourceLocation`**: Defined in `vyn/source_location.hpp`. Stores filename, line, and column.
+-   **`vyn::NodeType`**: Enum to identify the specific type of the node, reflecting the current C++ implementation.
+-   **`vyn::Node::loc`**: The source location of the node.
+-   **`vyn::Node::inferredTypeName`**: A string for type checking or code generation hints.
+-   **`vyn::Node::getType()`**: Returns the `NodeType` of the node.
+-   **`vyn::Node::accept(Visitor&)`**: Pure virtual method for the Visitor pattern.
+-   **`vyn::Node::toString()`**: Pure virtual method for debugging.
+-   **Implemented Base Classes**: `vyn::Expression`, `vyn::Statement`, `vyn::Declaration` (which inherits from `Statement`).
+-   **Planned Node Categories**: `PatternNode` represent categories of nodes that are part of the broader language design but are not yet implemented as specific base classes in C++ or have limited/different representation.
 
-The parser components (`BaseParser`, `DeclarationParser`, `ExpressionParser`, `StatementParser`, etc.) are responsible for constructing instances of these AST nodes. `std::unique_ptr` is used for ownership, with the `ModuleNode` ultimately owning all nodes for a file. `SourceLocation` is set by the parser for each node.
+## 3. AST Node Types (`NodeType` Enum)
 
-## 12. Future Considerations
+The `NodeType` enum, defined in `vyn/parser/ast.hpp`, provides a unique identifier for each type of AST node. This is crucial for type-safe downcasting and for visitors to determine the concrete type of a `Node*`.
 
--   **Annotations/Attributes**: EBNF includes `attributes?` for many declarations. The AST will need `AttributeNode`s that can be attached to declarable nodes. (Still relevant)
--   **Error Handling**: Robust strategies for partial ASTs or error nodes during parsing remain important, beyond specific throw/try AST nodes. (Still relevant)
--   **`scoped` block semantics**: `ScopedStatementNode` is now defined in the AST, corresponding to the EBNF `scoped_statement`. The precise semantics and use cases for `scoped` blocks are part of ongoing language design. (AST node exists, semantics are a design consideration)
--   **Const Generic Parameter Details**: `GenericParamNode` now supports `isConst` and `constType`, and `TypeAnnotation` allows expressions as generic arguments, aligning with EBNF. Further refinement of their use in type checking and code generation is part of implementation. (Largely covered in AST design)
--   **Macro System Details**: The EBNF defines `macro_definition` and `macro_invocation`. The AST will require `MacroDefinitionNode` and `MacroInvocationNode`. The structure of `MacroInvocationNode` arguments (e.g., token stream vs. parsed expressions) needs definition. (Still relevant)
--   **Operator Overloading Details**: The EBNF includes `operator_declaration`. The AST will need to represent these, likely as specialized `FunctionDeclarationNode` or `MethodDeclarationNode` instances, and how they are resolved. (Still relevant)
+```cpp
+enum class NodeType {
+    // Literals
+    IDENTIFIER,
+    INTEGER_LITERAL,
+    FLOAT_LITERAL,
+    STRING_LITERAL,
+    BOOLEAN_LITERAL,
+    ARRAY_LITERAL,         // Formerly ARRAY_LITERAL_NODE
+    OBJECT_LITERAL,        // Formerly OBJECT_LITERAL_NODE
+    NIL_LITERAL,
 
-## 13. Open Questions & Discussion Points
+    // Expressions
+    UNARY_EXPRESSION,
+    BINARY_EXPRESSION,
+    CALL_EXPRESSION,
+    CONSTRUCTION_EXPRESSION, // New: For TypeName(arguments)
+    ARRAY_INITIALIZATION_EXPRESSION, // New: For [Type; Size]()
+    MEMBER_EXPRESSION,
+    ASSIGNMENT_EXPRESSION,
+    IF_EXPRESSION,      // New: For if-expressions - Check C++ impl status
+    RANGE_EXPRESSION,   // New: For range expressions (e.g., a..b) - Check C++ impl status
+    BORROW_EXPRESSION,     // Formerly BORROW_EXPRESSION_NODE
+    POINTER_DEREF_EXPRESSION, // Implemented
+    ADDR_OF_EXPRESSION,       // Implemented
+    FROM_INT_TO_LOC_EXPRESSION, // Implemented
+    ARRAY_ELEMENT_EXPRESSION, // Implemented
+    LOCATION_EXPRESSION,    // Implemented (from ast_extra.cpp)
+    LIST_COMPREHENSION,     // Implemented (from ast_extra.cpp)
 
--   **Error Handling during AST Construction**: How should the parser signal unrecoverable syntax errors? Current approach involves throwing exceptions, but alternatives like error nodes or partial ASTs could be considered. (Still relevant)
--   **Completeness of `ast.hpp` Snippet**: The provided `ast.hpp` in context primarily shows forward declarations and visitor methods for many nodes. This document assumes their member structures based on common practices and their `NodeType`. Full definitions in `ast.hpp` would be beneficial for precise documentation. (Still relevant)
--   **Struct Field Mutability**: `FieldDeclaration` in the AST (and EBNF `field_declaration`) does not specify mutability. Mutability of struct fields is typically handled by the mutability of the struct instance itself (e.g. `let s = MyStruct(); s.field = ...` would be an error if `s` is not `let mut` or `var`). This needs clear definition in the language design. (Still relevant for language design)
 
-### Proposal: Ternary Conditional Operator
+    // Statements
+    BLOCK_STATEMENT,
+    EXPRESSION_STATEMENT,
+    IF_STATEMENT,
+    FOR_STATEMENT,
+    WHILE_STATEMENT,
+    RETURN_STATEMENT,
+    BREAK_STATEMENT,
+    CONTINUE_STATEMENT,
+    THROW_STATEMENT,    // New: For throw statements - Check C++ impl status
+    SCOPED_STATEMENT,   // New: For scoped blocks - Check C++ impl status
+    PATTERN_ASSIGNMENT_STATEMENT, // New: For pattern-based assignments - Check C++ impl status
+    TRY_STATEMENT,      // Implemented
 
-*(This feature is now part of the language design, reflected in the EBNF grammar as `conditional_expression` and in the AST as `TernaryExpressionNode` (NodeType: `TERNARY_EXPRESSION`).)*
+    // Declarations
+    VARIABLE_DECLARATION,
+    FUNCTION_DECLARATION,
+    TYPE_ALIAS_DECLARATION,
+    IMPORT_DECLARATION,
+    STRUCT_DECLARATION,
+    CLASS_DECLARATION,  // Note: May be superseded or refined by traits/impls
+    FIELD_DECLARATION,
+    IMPL_DECLARATION,
+    ENUM_DECLARATION,
+    ENUM_VARIANT,
+    GENERIC_PARAMETER,    // Formerly GENERIC_PARAM_NODE
+    TRAIT_DECLARATION,  // New: For trait definitions - Check C++ impl status
+    METHOD_SIGNATURE,   // New: For method signatures within traits - Check C++ impl status
+    TEMPLATE_DECLARATION, // Formerly TEMPLATE_DECLARATION_NODE
 
-**Syntax:** `condition ? expression_if_true : expression_if_false`
+    // Other
+    TYPE_NODE,         // Represents type information (C++: TypeNode)
+    MODULE
+};
+```
 
-**Description:**
-A ternary conditional operator provides a concise way to express a simple if-else conditional expression. It evaluates `condition`; if true, it evaluates and returns `expression_if_true`; otherwise, it evaluates and returns `expression_if_false`.
+-   **`vyn::SourceLocation`**: Defined in `vyn/source_location.hpp`. Stores filename, line, and column.
+-   **`vyn::NodeType`**: Enum to identify the specific type of the node, reflecting the current C++ implementation.
+-   **`vyn::Node::loc`**: The source location of the node.
+-   **`vyn::Node::inferredTypeName`**: A string for type checking or code generation hints.
+-   **`vyn::Node::getType()`**: Returns the `NodeType` of the node.
+-   **`vyn::Node::accept(Visitor&)`**: Pure virtual method for the Visitor pattern.
+-   **`vyn::Node::toString()`**: Pure virtual method for debugging.
+-   **Implemented Base Classes**: `vyn::Expression`, `vyn::Statement`, `vyn::Declaration` (which inherits from `Statement`).
+-   **Planned Node Categories**: `PatternNode` represent categories of nodes that are part of the broader language design but are not yet implemented as specific base classes in C++ or have limited/different representation.
 
-**Benefits:**
-*   **Conciseness:** Can make simple conditional assignments or expressions more readable and compact compared to a full `if-else` statement block.
-*   **Familiarity:** Many programmers are familiar with this operator from languages like C, C++, Java, JavaScript, Python, etc.
+## 4. Detailed Node Descriptions
 
+### 4.1. `Identifier`
 
-# Note:
-This document reflects the AST structure as per the latest understanding of `ast.hpp` and `ast.cpp` implementations and Vyn language examples. It should be updated as the language and its AST evolve.
+Represents an identifier in the source code.
 
+-   **C++ Class**: `vyn::ast::Identifier`
+-   **`NodeType`**: `IDENTIFIER`
+-   **Fields**:
+    -   `name` (`std::string`): The name of the identifier.
+
+```cpp
+// From ast.hpp
+class Identifier : public Node {
+public:
+    std::string name;
+
+    Identifier(SourceLocation loc, std::string name);
+    NodeType getType() const override;
+    std::string toString() const override;
+    void accept(Visitor& visitor) override;
+};
+```
+
+### 4.2. `IntegerLiteral`
+
+Represents an integer literal.
+
+-   **C++ Class**: `vyn::ast::IntegerLiteral`
+-   **`NodeType`**: `INTEGER_LITERAL`
+-   **Fields**:
+    -   `value` (`int64_t`): The value of the literal.
+
+```cpp
+// From ast.hpp
+class IntegerLiteral : public Node {
+public:
+    int64_t value;
+
+    IntegerLiteral(SourceLocation loc, int64_t value);
+    NodeType getType() const override;
+    std::string toString() const override;
+    void accept(Visitor& visitor) override;
+};
+```
+
+### 4.3. `FloatLiteral`
+
+Represents a floating-point literal.
+
+-   **C++ Class**: `vyn::ast::FloatLiteral`
+-   **`NodeType`**: `FLOAT_LITERAL`
+-   **Fields**:
+    -   `value` (`double`): The value of the literal.
+
+```cpp
+// From ast.hpp
+class FloatLiteral : public Node {
+public:
+    double value;
+
+    FloatLiteral(SourceLocation loc, double value);
+    NodeType getType() const override;
+    std::string toString() const override;
+    void accept(Visitor& visitor) override;
+};
+```
+
+### 4.4. `StringLiteral`
+
+Represents a string literal.
+
+-   **C++ Class**: `vyn::ast::StringLiteral`
+-   **`NodeType`**: `STRING_LITERAL`
+-   **Fields**:
+    -   `value` (`std::string`): The value of the literal.
+
+```cpp
+// From ast.hpp
+class StringLiteral : public Node {
+public:
+    std::string value;
+
+    StringLiteral(SourceLocation loc, std::string value);
+    NodeType getType() const override;
+    std::string toString() const override;
+    void accept(Visitor& visitor) override;
+};
+```
+
+### 4.5. `BooleanLiteral`
+
+Represents a boolean literal.
+
+-   **C++ Class**: `vyn::ast::BooleanLiteral`
+-   **`NodeType`**: `BOOLEAN_LITERAL`
+-   **Fields**:
+    -   `value` (`bool`): The value of the literal.
+
+```cpp
+// From ast.hpp
+class BooleanLiteral : public Node {
+public:
+    bool value;
+
+    BooleanLiteral(SourceLocation loc, bool value);
+    NodeType getType() const override;
+    std::string toString() const override;
+    void accept(Visitor& visitor) override;
+};
+```
+
+### 4.6. `NilLiteral`
+
+Represents a `nil` literal, indicating the absence of a value.
+
+-   **C++ Class**: `vyn::ast::NilLiteral`
+-   **`NodeType`**: `NIL_LITERAL`
+
+```cpp
+// From ast.hpp
+class NilLiteral : public Node {
+public:
+    NilLiteral(SourceLocation loc);
+    NodeType getType() const override;
+    std::string toString() const override;
+    void accept(Visitor& visitor) override;
+};
+```
+
+### 4.7. `UnaryExpression`
+
+Represents a unary expression, such as negation.
+
+-   **C++ Class**: `vyn::ast::UnaryExpression`
+-   **`NodeType`**: `UNARY_EXPRESSION`
+-   **Fields**:
+    -   `operator` (`std::string`): The unary operator (e.g., `-`, `!`).
+    -   `operand` (`PExpression`): The operand of the unary expression.
+
+```cpp
+// From ast.hpp
+class UnaryExpression : public Expression {
+public:
+    std::string operator;
+    PExpression operand;
+
+    UnaryExpression(SourceLocation loc, std::string op, PExpression operand);
+    NodeType getType() const override;
+    std::string toString() const override;
+    void accept(Visitor& visitor) override;
+};
+```
+
+### 4.8. `BinaryExpression`
+
+Represents a binary expression, such as addition or equality.
+
+-   **C++ Class**: `vyn::ast::BinaryExpression`
+-   **`NodeType`**: `BINARY_EXPRESSION`
+-   **Fields**:
+    -   `operator` (`std::string`): The binary operator (e.g., `+`, `==`).
+    -   `left` (`PExpression`): The left operand.
+    -   `right` (`PExpression`): The right operand.
+
+```cpp
+// From ast.hpp
+class BinaryExpression : public Expression {
+public:
+    std::string operator;
+    PExpression left;
+    PExpression right;
+
+    BinaryExpression(SourceLocation loc, std::string op, PExpression left, PExpression right);
+    NodeType getType() const override;
+    std::string toString() const override;
+    void accept(Visitor& visitor) override;
+};
+```
+
+### 4.9. `TernaryExpression`
+
+Represents a ternary expression (conditional expression).
+
+-   **C++ Class**: `vyn::ast::TernaryExpression`
+-   **`NodeType`**: `TERNARY_EXPRESSION`
+-   **Fields**:
+    -   `condition` (`PExpression`): The condition expression.
+    -   `trueBranch` (`PExpression`): The expression if the condition is true.
+    -   `falseBranch` (`PExpression`): The expression if the condition is false.
+
+```cpp
+// From ast.hpp
+class TernaryExpression : public Expression {
+public:
+    PExpression condition;
+    PExpression trueBranch;
+    PExpression falseBranch;
+
+    TernaryExpression(SourceLocation loc, PExpression condition, PExpression trueBranch, PExpression falseBranch);
+    NodeType getType() const override;
+    std::string toString() const override;
+    void accept(Visitor& visitor) override;
+};
+```
+
+### 4.10. `CallExpression`
+
+Represents a function or method call.
+
+-   **C++ Class**: `vyn::ast::CallExpression`
+-   **`NodeType`**: `CALL_EXPRESSION`
+-   **Fields**:
+    -   `function` (`PExpression`): The function being called.
+    -   `arguments` (`std::vector<PExpression>`): The arguments passed to the function.
+
+```cpp
+// From ast.hpp
+class CallExpression : public Expression {
+public:
+    PExpression function;
+    std::vector<PExpression> arguments;
+
+    CallExpression(SourceLocation loc, PExpression function, std::vector<PExpression> arguments);
+    NodeType getType() const override;
+    std::string toString() const override;
+    void accept(Visitor& visitor) override;
+};
+```
+
+### 4.11. `ConstructionExpression`
+
+Represents an expression that constructs an instance of a type (e.g., `Point(10, 20)`).
+
+-   **C++ Class**: `vyn::ast::ConstructionExpression`
+-   **`NodeType`**: `CONSTRUCTION_EXPRESSION`
+-   **Fields**:
+    -   `typeName` (`PExpression`): The name of the type being constructed.
+    -   `arguments` (`std::vector<PExpression>`): The arguments passed to the constructor.
+
+```cpp
+// From ast.hpp
+class ConstructionExpression : public Expression {
+public:
+    PExpression typeName;
+    std::vector<PExpression> arguments;
+
+    ConstructionExpression(SourceLocation loc, PExpression typeName, std::vector<PExpression> arguments);
+    NodeType getType() const override;
+    std::string toString() const override;
+    void accept(Visitor& visitor) override;
+};
+```
+
+### 4.12. `ArrayInitializationExpression`
+
+Represents the initialization of an array with a specific type and size (e.g., `[int; 10]`).
+
+-   **C++ Class**: `vyn::ast::ArrayInitializationExpression`
+-   **`NodeType`**: `ARRAY_INITIALIZATION_EXPRESSION`
+-   **Fields**:
+    -   `typeNode` (`PTypeNode`): The type of the array elements.
+    -   `size` (`PExpression`): The size of the array.
+
+```cpp
+// From ast.hpp
+class ArrayInitializationExpression : public Expression {
+public:
+    PTypeNode typeNode;
+    PExpression size;
+
+    ArrayInitializationExpression(SourceLocation loc, PTypeNode typeNode, PExpression size);
+    NodeType getType() const override;
+    std::string toString() const override;
+    void accept(Visitor& visitor) override;
+};
+```
+
+### 4.13. `MemberExpression`
+
+Represents accessing a member of a struct or class (e.g., `obj.member`).
+
+-   **C++ Class**: `vyn::ast::MemberExpression`
+-   **`NodeType`**: `MEMBER_EXPRESSION`
+-   **Fields**:
+    -   `object` (`PExpression`): The object being accessed.
+    -   `member` (`std::string`): The name of the member.
+
+```cpp
+// From ast.hpp
+class MemberExpression : public Expression {
+public:
+    PExpression object;
+    std::string member;
+
+    MemberExpression(SourceLocation loc, PExpression object, std::string member);
+    NodeType getType() const override;
+    std::string toString() const override;
+    void accept(Visitor& visitor) override;
+};
+```
+
+### 4.14. `AssignmentExpression`
+
+Represents an assignment operation (e.g., `a = b`).
+
+-   **C++ Class**: `vyn::ast::AssignmentExpression`
+-   **`NodeType`**: `ASSIGNMENT_EXPRESSION`
+-   **Fields**:
+    -   `left` (`PExpression`): The left-hand side expression (e.g., the variable).
+    -   `right` (`PExpression`): The right-hand side expression (e.g., the value).
+
+```cpp
+// From ast.hpp
+class AssignmentExpression : public Expression {
+public:
+    PExpression left;
+    PExpression right;
+
+    AssignmentExpression(SourceLocation loc, PExpression left, PExpression right);
+    NodeType getType() const override;
+    std::string toString() const override;
+    void accept(Visitor& visitor) override;
+};
+```
+
+### 4.15. `IfExpression`
+
+Represents an if-expression, which evaluates to one of two values based on a condition (e.g., `if (cond) expr1 else expr2`).
+
+-   **C++ Class**: `vyn::ast::IfExpression`
+-   **`NodeType`**: `IF_EXPRESSION`
+-   **Fields**:
+    -   `condition` (`PExpression`): The condition to evaluate.
+    -   `trueBranch` (`PExpression`): The expression to evaluate if the condition is true.
+    -   `falseBranch` (`PExpression`): The expression to evaluate if the condition is false.
+
+```cpp
+// From ast.hpp
+class IfExpression : public Expression {
+public:
+    PExpression condition;
+    PExpression trueBranch;
+    PExpression falseBranch;
+
+    IfExpression(SourceLocation loc, PExpression condition, PExpression trueBranch, PExpression falseBranch);
+    NodeType getType() const override;
+    std::string toString() const override;
+    void accept(Visitor& visitor) override;
+};
+```
+
+### 4.16. `RangeExpression`
+
+Represents a range expression, typically used in for-loops or to specify ranges (e.g., `1..10`).
+
+-   **C++ Class**: `vyn::ast::RangeExpression`
+-   **`NodeType`**: `RANGE_EXPRESSION`
+-   **Fields**:
+    -   `start` (`PExpression`): The starting value of the range.
+    -   `end` (`PExpression`): The ending value of the range.
+
+```cpp
+// From ast.hpp
+class RangeExpression : public Expression {
+public:
+    PExpression start;
+    PExpression end;
+
+    RangeExpression(SourceLocation loc, PExpression start, PExpression end);
+    NodeType getType() const override;
+    std::string toString() const override;
+    void accept(Visitor& visitor) override;
+};
+```
+
+### 4.17. `BorrowExpression` (Formerly `BorrowExprNode`)
+
+Represents a borrow expression (e.g., `&x`, `&mut y`).
+
+-   **C++ Class**: `vyn::ast::BorrowExpression`
+-   **`NodeType`**: `BORROW_EXPRESSION`
+-   **Fields**:
+    -   `expression` (`PExpression`: The expression being borrowed.
+    -   `isMutable` (`bool`): True if it's a mutable borrow (`&mut`), false otherwise (`&`).
+
+```cpp
+// From ast.hpp
+class BorrowExpression : public Expression { // Renamed from BorrowExprNode
+public:
+    PExpression expression;
+    bool isMutable;
+
+    BorrowExpression(SourceLocation loc, PExpression expression, bool isMutable);
+    NodeType getType() const override;
+    std::string toString() const override;
+    void accept(Visitor& visitor) override;
+}; // Added missing semicolon
+```
+
+### 4.18. `PointerDerefExpression`
+
+Represents dereferencing a pointer to access the value it points to (e.g., `*ptr`).
+
+-   **C++ Class**: `vyn::ast::PointerDerefExpression`
+-   **`NodeType`**: `POINTER_DEREF_EXPRESSION`
+-   **Fields**:
+    -   `pointer` (`PExpression`): The pointer expression being dereferenced.
+
+```cpp
+// From ast.hpp
+class PointerDerefExpression : public Expression {
+public:
+    PExpression pointer;
+
+    PointerDerefExpression(SourceLocation loc, PExpression pointer);
+    NodeType getType() const override;
+    std::string toString() const override;
+    void accept(Visitor& visitor) override;
+};
+```
+
+### 4.19. `AddrOfExpression`
+
+Represents the address-of operation, which gets the memory address of a variable (e.g., `&var`).
+
+-   **C++ Class**: `vyn::ast::AddrOfExpression`
+-   **`NodeType`**: `ADDR_OF_EXPRESSION`
+-   **Fields**:
+    -   `operand` (`PExpression`): The operand whose address is being taken.
+
+```cpp
+// From ast.hpp
+class AddrOfExpression : public Expression {
+public:
+    PExpression operand;
+
+    AddrOfExpression(SourceLocation loc, PExpression operand);
+    NodeType getType() const override;
+    std::string toString() const override;
+    void accept(Visitor& visitor) override;
+};
+```
+
+### 4.20. `FromIntToLocExpression`
+
+Represents a conversion from an integer to a location (line and column) in the source code.
+
+-   **C++ Class**: `vyn::ast::FromIntToLocExpression`
+-   **`NodeType`**: `FROM_INT_TO_LOC_EXPRESSION`
+-   **Fields**:
+    -   `line` (`PExpression`): The line number.
+    -   `column` (`PExpression`): The column number.
+
+```cpp
+// From ast.hpp
+class FromIntToLocExpression : public Expression {
+public:
+    PExpression line;
+    PExpression column;
+
+    FromIntToLocExpression(SourceLocation loc, PExpression line, PExpression column);
+    NodeType getType() const override;
+    std::string toString() const override;
+    void accept(Visitor& visitor) override;
+};
+```
+
+### 4.21. `ArrayElementExpression`
+
+Represents accessing an element of an array (e.g., `arr[0]`).
+
+-   **C++ Class**: `vyn::ast::ArrayElementExpression`
+-   **`NodeType`**: `ARRAY_ELEMENT_EXPRESSION`
+-   **Fields**:
+    -   `array` (`PExpression`): The array expression.
+    -   `index` (`PExpression`): The index of the element.
+
+```cpp
+// From ast.hpp
+class ArrayElementExpression : public Expression {
+public:
+    PExpression array;
+    PExpression index;
+
+    ArrayElementExpression(SourceLocation loc, PExpression array, PExpression index);
+    NodeType getType() const override;
+    std::string toString() const override;
+    void accept(Visitor& visitor) override;
+};
+```
+
+### 4.22. `LocationExpression`
+
+Represents an expression that yields the current location (line and column) in the source code.
+
+-   **C++ Class**: `vyn::ast::LocationExpression`
+-   **`NodeType`**: `LOCATION_EXPRESSION`
+
+```cpp
+// From ast.hpp
+class LocationExpression : public Expression {
+public:
+    LocationExpression(SourceLocation loc);
+    NodeType getType() const override;
+    std::string toString() const override;
+    void accept(Visitor& visitor) override;
+};
+```
+
+### 4.23. `ListComprehension`
+
+Represents a list comprehension, which is syntactic sugar for creating lists (e.g., `[x * 2 for x in xs]`).
+
+-   **C++ Class**: `vyn::ast::ListComprehension`
+-   **`NodeType`**: `LIST_COMPREHENSION`
+-   **Fields**:
+    -   `element` (`PExpression`): The expression for the list element.
+    -   `source` (`PExpression`): The source collection.
+    -   `filter` (`PExpression`, optional): An optional filter expression.
+
+```cpp
+// From ast.hpp
+class ListComprehension : public Expression {
+public:
+    PExpression element;
+    PExpression source;
+    PExpression filter; // Optional
+
+    ListComprehension(SourceLocation loc, PExpression element, PExpression source, PExpression filter);
+    NodeType getType() const override;
+    std::string toString() const override;
+    void accept(Visitor& visitor) override;
+};
+```
+
+### 4.24. `BlockStatement`
+
+Represents a block of statements, typically enclosed in braces `{}`.
+
+-   **C++ Class**: `vyn::ast::BlockStatement`
+-   **`NodeType`**: `BLOCK_STATEMENT`
+-   **Fields**:
+    -   `statements` (`std::vector<PStatement>`): The statements in the block.
+
+```cpp
+// From ast.hpp
+class BlockStatement : public Statement {
+public:
+    std::vector<PStatement> statements;
+
+    BlockStatement(SourceLocation loc, std::vector<PStatement> statements);
+    NodeType getType() const override;
+    std::string toString() const override;
+    void accept(Visitor& visitor) override;
+};
+```
+
+### 4.25. `ExpressionStatement`
+
+Represents a statement that consists of an expression.
+
+-   **C++ Class**: `vyn::ast::ExpressionStatement`
+-   **`NodeType`**: `EXPRESSION_STATEMENT`
+-   **Fields**:
+    -   `expression` (`PExpression`): The expression.
+
+```cpp
+// From ast.hpp
+class ExpressionStatement : public Statement {
+public:
+    PExpression expression;
+
+    ExpressionStatement(SourceLocation loc, PExpression expression);
+    NodeType getType() const override;
+    std::string toString() const override;
+    void accept(Visitor& visitor) override;
+};
+```
+
+### 4.26. `IfStatement`
+
+Represents an if statement.
+
+-   **C++ Class**: `vyn::ast::IfStatement`
+-   **`NodeType`**: `IF_STATEMENT`
+-   **Fields**:
+    -   `condition` (`PExpression`): The condition to evaluate.
+    -   `thenBranch` (`PStatement`): The statement to execute if the condition is true.
+    -   `elseBranch` (`PStatement`, optional): The statement to execute if the condition is false.
+
+```cpp
+// From ast.hpp
+class IfStatement : public Statement {
+public:
+    PExpression condition;
+    PStatement thenBranch;
+    PStatement elseBranch; // Optional
+
+    IfStatement(SourceLocation loc, PExpression condition, PStatement thenBranch, PStatement elseBranch);
+    NodeType getType() const override;
+    std::string toString() const override;
+    void accept(Visitor& visitor) override;
+};
+```
+
+### 4.27. `ForStatement`
+
+Represents a for loop.
+
+-   **C++ Class**: `vyn::ast::ForStatement`
+-   **`NodeType`**: `FOR_STATEMENT`
+-   **Fields**:
+    -   `iterator` (`PIdentifier`): The loop variable.
+    -   `range` (`PExpression`): The range or collection to iterate over.
+    -   `body` (`PStatement`): The body of the loop.
+
+```cpp
+// From ast.hpp
+class ForStatement : public Statement {
+public:
+    PIdentifier iterator;
+    PExpression range;
+    PStatement body;
+
+    ForStatement(SourceLocation loc, PIdentifier iterator, PExpression range, PStatement body);
+    NodeType getType() const override;
+    std::string toString() const override;
+    void accept(Visitor& visitor) override;
+};
+```
+
+### 4.28. `WhileStatement`
+
+Represents a while loop.
+
+-   **C++ Class**: `vyn::ast::WhileStatement`
+-   **`NodeType`**: `WHILE_STATEMENT`
+-   **Fields**:
+    -   `condition` (`PExpression`): The condition to evaluate.
+    -   `body` (`PStatement`): The body of the loop.
+
+```cpp
+// From ast.hpp
+class WhileStatement : public Statement {
+public:
+    PExpression condition;
+    PStatement body;
+
+    WhileStatement(SourceLocation loc, PExpression condition, PStatement body);
+    NodeType getType() const override;
+    std::string toString() const override;
+    void accept(Visitor& visitor) override;
+};
+```
+
+### 4.29. `ReturnStatement`
+
+Represents a return statement.
+
+-   **C++ Class**: `vyn::ast::ReturnStatement`
+-   **`NodeType`**: `RETURN_STATEMENT`
+-   **Fields**:
+    -   `value` (`PExpression`, optional): The value to return.
+
+```cpp
+// From ast.hpp
+class ReturnStatement : public Statement {
+public:
+    PExpression value; // Optional
+
+    ReturnStatement(SourceLocation loc, PExpression value);
+    NodeType getType() const override;
+    std::string toString() const override;
+    void accept(Visitor& visitor) override;
+};
+```
+
+### 4.30. `GenericParameter` (Formerly `GenericParamNode`)
+
+Represents a generic parameter in a template or generic function/type definition (e.g., `T` in `fn foo<T>(p: T)`).
+
+-   **C++ Class**: `vyn::ast::GenericParameter`
+-   **`NodeType`**: `GENERIC_PARAMETER`
+-   **Fields**:
+    -   `name` (`PIdentifier`): The identifier of the generic parameter.
+    -   `constraints` (`std::vector<PTypeNode>`): Optional type constraints for the parameter.
+
+```cpp
+// From ast.hpp
+class GenericParameter : public Node { // Renamed from GenericParamNode
+public:
+    PIdentifier name;
+    std::vector<PTypeNode> constraints;
+
+    GenericParameter(SourceLocation loc, PIdentifier name, std::vector<PTypeNode> constraints);
+    NodeType getType() const override;
+    std::string toString() const override;
+    void accept(Visitor& visitor) override;
+};
+```
+
+### 4.31. `TemplateDeclaration` (Formerly `TemplateDeclarationNode`)
+
+Represents a template declaration, which can be used to define generic functions, structs, or classes.
+
+-   **C++ Class**: `vyn::ast::TemplateDeclaration`
+-   **`NodeType`**: `TEMPLATE_DECLARATION`
+-   **Fields**:
+    -   `name` (`PIdentifier`): The name of the template.
+    -   `parameters` (`std::vector<PGenericParameter>`): A list of generic parameters for the template. (Note: `PGenericParameter` used here, reflecting the rename from `GenericParamNode`)
+    -   `declaration` (`PDeclaration`): The declaration being templated (e.g., a function or struct declaration).
+
+```cpp
+// From ast.hpp
+class TemplateDeclaration : public Declaration { // Renamed from TemplateDeclarationNode
+public:
+    PIdentifier name;
+    std::vector<PGenericParameter> parameters; // Updated to PGenericParameter
+    PDeclaration declaration;
+
+    TemplateDeclaration(SourceLocation loc, PIdentifier name, std::vector<PGenericParameter> parameters, PDeclaration declaration);
+    NodeType getType() const override;
+    std::string toString() const override;
+    void accept(Visitor& visitor) override;
+};
+```
+
+### 4.32. `TypeNode`
+
+Represents type information in the AST. This is used for type annotations and in type-related expressions.
+
+-   **C++ Class**: `vyn::ast::TypeNode`
+-   **`NodeType`**: `TYPE_NODE`
+-   **Fields**:
+    -   `name` (`std::string`): The name of the type.
+    -   `parameters` (`std::vector<PTypeNode>`): Optional type parameters for generic types.
+
+```cpp
+// From ast.hpp
+class TypeNode : public Node {
+public:
+    std::string name;
+    std::vector<PTypeNode> parameters;
+
+    TypeNode(SourceLocation loc, std::string name, std::vector<PTypeNode> parameters);
+    NodeType getType() const override;
+    std::string toString() const override;
+    void accept(Visitor& visitor) override;
+};
+```

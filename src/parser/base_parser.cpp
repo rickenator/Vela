@@ -138,6 +138,28 @@ namespace vyn {
         return consume();
     }
 
+    // New overload for expecting a token type with a custom error message
+    vyn::token::Token BaseParser::expect(vyn::TokenType type, const char* customErrorMessage) {
+        const vyn::token::Token& next_token = peek();
+        #ifdef VERBOSE
+        std::cerr << "[EXPECT] " << vyn::token_type_to_string(type)
+                  << " (custom msg: \"" << customErrorMessage << "\") checking against " << vyn::token_type_to_string(next_token.type)
+                  << " (" << next_token.lexeme << ")" << std::endl;
+        #endif
+        if (next_token.type != type) {
+            std::string error_msg = std::string(customErrorMessage) +
+                                   " but found " + vyn::token_type_to_string(next_token.type) +
+                                   " (\"" + next_token.lexeme + "\") at file " + current_file_path_ +
+                                   ", line " + std::to_string(next_token.location.line) +
+                                   ", column " + std::to_string(next_token.location.column);
+            #ifdef VERBOSE
+            std::cerr << "[ERROR] " << error_msg << std::endl;
+            #endif
+            throw std::runtime_error(error_msg);
+        }
+        return consume();
+    }
+
     std::optional<vyn::token::Token> BaseParser::match(vyn::TokenType type) {
         if (check(type)) {
             return consume();

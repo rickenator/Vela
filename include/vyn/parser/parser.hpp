@@ -59,7 +59,8 @@ namespace vyn { // Changed Vyn to vyn
         void put_back_token(); 
         vyn::token::Token consume(); 
         vyn::token::Token expect(vyn::TokenType type); 
-        vyn::token::Token expect(vyn::TokenType type, const std::string& lexeme); 
+        vyn::token::Token expect(vyn::TokenType type, const std::string& lexeme); // Checks type AND lexeme
+        vyn::token::Token expect(vyn::TokenType type, const char* customErrorMessage); // Corrected: checks type, uses custom message on failure
         std::optional<vyn::token::Token> match(vyn::TokenType type); 
         std::optional<vyn::token::Token> match(vyn::TokenType type, const std::string& lexeme); 
         std::optional<vyn::token::Token> match(const std::vector<vyn::TokenType>& types); 

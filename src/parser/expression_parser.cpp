@@ -75,20 +75,234 @@ namespace vyn {
 
     vyn::ast::ExprPtr ExpressionParser::parse_primary() {
         SourceLocation loc = peek().location;
-        if (is_literal(peek().type)) { // is_literal needs to be a member or passed BaseParser
+
+        // Try to parse TypeName(arguments) - Constructor Call
+        // This requires being able to parse a TypeNode first.
+        // We need a TypeParser instance here.
+        // For now, we\'ll assume TypeParser is part of `this` parser or can be created.
+        // This is a lookahead and backtrack mechanism.
+        size_t initial_pos = pos_;
+        try {
+            TypeParser type_parser(tokens_, pos_, file_path_, *this); // Pass *this for ExpressionParser reference
+            ast::TypeNodePtr type_node = type_parser.parse(); // Call parse() instead of parse_type_annotation()
+            
+            if (type_node && match(TokenType::LPAREN)) { // Successfully parsed a type and found \'(\'
+                // It's a ConstructionExpression
+                std::vector<vyn::ast::ExprPtr> arguments;
+                SourceLocation call_loc = previous_token().location; 
+                if (!match(TokenType::RPAREN)) { 
+                    do {
+                        arguments.push_back(parse_expression());
+                    } while (match(TokenType::COMMA));
+                    expect(TokenType::RPAREN);
+                }
+                // The location for ConstructionExpression should ideally span from type to ')'
+                // For now, using call_loc (location of LPAREN) is a simplification.
+                // A better loc would be type_node->loc combined with the RPAREN location.
+                return std::make_unique<ast::ConstructionExpression>(type_node->loc, std::move(type_node), std::move(arguments));
+            } else {
+                // Not a TypeName(...), backtrack
+                pos_ = initial_pos;
+            }
+        } catch (const std::runtime_error& e) {
+            // Parsing type failed, or not followed by \'(\', backtrack
+            pos_ = initial_pos;
+            // Log or handle error if needed, or just proceed to other parsing rules
+        }
+        // If it wasn\'t a TypeName(...), reset pos_ and try other primary expression forms.
+        // Ensure pos_ is correctly managed by TypeParser or reset it manually.
+        // The TypeParser must not consume tokens if it fails to parse a complete type for this to work well.
+
+
+        // Try to parse [Type; Size]() - Array Initialization
+        if (peek().type == TokenType::LBRACKET) {
+            size_t before_array_init_pos = pos_;
+            consume(); // Consume LBRACKET
+            try {
+                TypeParser type_parser_for_array(tokens_, pos_, file_path_, *this); // Pass *this for ExpressionParser reference
+                ast::TypeNodePtr element_type = type_parser_for_array.parse(); // Call parse()
+
+                if (element_type && match(TokenType::SEMICOLON)) {
+                    ast::ExprPtr size_expr = parse_expression();
+                    expect(TokenType::RBRACKET);
+                    if (match(TokenType::LPAREN)) {
+                        expect(TokenType::RPAREN);
+                        // It's an ArrayInitializationExpression
+                        return std::make_unique<ast::ArrayInitializationExpression>(loc, std::move(element_type), std::move(size_expr));
+                    }
+                    // If not LPAREN RPAREN, it's something else, backtrack
+                    pos_ = before_array_init_pos; // Backtrack fully
+                } else {
+                    // Not [Type; Size], backtrack to before LBRACKET was consumed
+                    pos_ = before_array_init_pos;
+                }
+            } catch (const std::runtime_error& e) {
+                // Failed to parse type or other parts, backtrack
+                pos_ = before_array_init_pos;
+            }
+            // If we backtracked, it might be a regular array literal, fall through to that logic.
+        }
+
+        // Typed Struct Literal: Identifier { ... }
+        if (peek().type == TokenType::IDENTIFIER) {
+            bool is_typed_struct = false;
+            // Check if the next token after IDENTIFIER is LBRACE
+            if (pos_ + 1 < tokens_.size() && tokens_[pos_ + 1].type == TokenType::LBRACE) {
+                is_typed_struct = true;
+            }
+
+            if (is_typed_struct) {
+                token::Token type_name_token = consume(); // Consume IDENTIFIER
+                auto type_identifier_node = std::make_unique<ast::Identifier>(type_name_token.location, type_name_token.lexeme);
+                // Create a TypeNode for the type path. For simplicity, assuming it's a simple identifier type without generics for now.
+                // This might need to become a more complex type parsing if struct literals can have generic types like MyStruct<T>{...}
+                auto type_path_node = ast::TypeNode::newIdentifier(type_name_token.location, std::move(type_identifier_node));
+
+                expect(TokenType::LBRACE); // Consumes LBRACE
+                SourceLocation struct_loc = type_name_token.location; // Location of the typed struct literal starts with the type name
+
+                std::vector<ast::ObjectProperty> properties;
+                if (!check(TokenType::RBRACE)) { // If not an empty struct {} or MyType{}
+                    while (true) {
+                        if (peek().type != TokenType::IDENTIFIER) {
+                            throw error(peek(), "Expected identifier for struct field name.");
+                        }
+                        token::Token key_token = consume();
+                        auto key_identifier = std::make_unique<ast::Identifier>(key_token.location, key_token.lexeme);
+                        
+                        vyn::ast::ExprPtr value = nullptr;
+                        if (match(TokenType::COLON) || match(TokenType::EQ)) {
+                            if (check(TokenType::COMMA) || check(TokenType::RBRACE)) {
+                                throw error(peek(), "Expected expression for struct field value after ':' or '='.");
+                            }
+                            value = parse_expression();
+                        } else {
+                            // Shorthand: { fieldName }. AST.md: value is optional (null).
+                            // If ast::ObjectProperty requires an actual expression for shorthand (e.g., an Identifier node),
+                            // this would be: value = std::make_unique<ast::Identifier>(key_token.location, key_token.lexeme);
+                            // Assuming nullptr is acceptable for the value in ast::ObjectProperty for shorthand.
+                        }
+                        properties.emplace_back(key_token.location, std::move(key_identifier), std::move(value));
+
+                        if (match(TokenType::COMMA)) {
+                            if (check(TokenType::RBRACE)) { // Trailing comma: { a:1, } or MyType{ a:1, }
+                                break;
+                            }
+                            // Comma consumed, expect another property. If next is not IDENTIFIER, it's an error.
+                            if (peek().type != TokenType::IDENTIFIER) {
+                                throw error(peek(), "Expected identifier for struct field name after comma.");
+                            }
+                        } else {
+                            break; // No comma, last property
+                        }
+                    }
+                }
+                expect(TokenType::RBRACE);
+                return std::make_unique<ast::ObjectLiteral>(struct_loc, std::move(type_path_node), std::move(properties));
+            } else {
+                // Plain Identifier
+                token::Token id_token = consume();
+                return std::make_unique<ast::Identifier>(id_token.location, id_token.lexeme);
+            }
+        }
+
+        if (is_literal(peek().type)) {
             return parse_literal();
         }
-        if (match(TokenType::IDENTIFIER)) {
-            return std::make_unique<ast::Identifier>(previous_token().location, previous_token().lexeme);
-        }
+
         if (match(TokenType::LPAREN)) {
             vyn::ast::ExprPtr expr = parse_expression();
             expect(TokenType::RPAREN);
             return expr;
         }
-        // this->errors.push_back("Expected primary expression at " + location_to_string(loc));
-        throw std::runtime_error("Expected primary expression at " + location_to_string(loc));
-        return nullptr;
+        
+        // Array literals: [element1, element2]
+        if (match(TokenType::LBRACKET)) {
+            SourceLocation array_loc = previous_token().location;
+            std::vector<vyn::ast::ExprPtr> elements;
+            if (!check(TokenType::RBRACKET)) { // If not immediately RBRACKET (empty array)
+                while (true) {
+                    // Check for missing expression before parsing an element
+                    if (check(TokenType::COMMA) || check(TokenType::RBRACKET)) {
+                        // If it's a COMMA, it means an empty element e.g. [1,,2] or [,] if it's the first element
+                        // If it's an RBRACKET, it means an empty element before RBRACKET if a comma was just consumed e.g. [1,]
+                        // This logic needs to be careful not to disallow valid trailing commas.
+                        // The error should trigger if we expect an expression but find COMMA or RBRACKET.
+                        // This happens if: (a) it's the first element and we see COMMA/RBRACKET, or (b) we just consumed a COMMA and see another COMMA/RBRACKET.
+                        bool prev_was_comma = (pos_ > 0 && tokens_[pos_-1].type == TokenType::COMMA);
+                        bool is_first_element_pos = (tokens_[pos_ -1].type == TokenType::LBRACKET); // Check if previous token was LBRACKET
+
+                        if (check(TokenType::COMMA) && (elements.empty() && is_first_element_pos || prev_was_comma) ) {
+                             throw error(peek(), "Expected expression for array element, found comma.");
+                        }
+                        // A RBRACKET here is fine if it's a trailing comma case, which is handled after parsing the element and matching COMMA.
+                        // If it's an empty array `[]` or `[ ]`, the outer `if (!check(TokenType::RBRACKET))` handles it.
+                    }
+
+                    elements.push_back(parse_expression());
+
+                    if (match(TokenType::COMMA)) {
+                        if (check(TokenType::RBRACKET)) { // Trailing comma: [1, ]
+                            break; 
+                        }
+                        // Comma consumed, expect another expression. If next is COMMA or RBRACKET, it's an error.
+                        if (check(TokenType::COMMA) || check(TokenType::RBRACKET)) {
+                            throw error(peek(), "Expected expression after comma in array literal.");
+                        }
+                    } else {
+                        break; // No comma, so this must be the last element
+                    }
+                }
+            }
+            expect(TokenType::RBRACKET);
+            return std::make_unique<ast::ArrayLiteralNode>(array_loc, std::move(elements)); 
+        }
+
+        // Anonymous Struct literals: { field1: value1, field2 }
+        if (match(TokenType::LBRACE)) {
+            SourceLocation struct_loc = previous_token().location;
+            std::vector<ast::ObjectProperty> properties;
+
+            if (!check(TokenType::RBRACE)) { // If not empty struct {}
+                while (true) {
+                    if (peek().type != TokenType::IDENTIFIER) {
+                         throw error(peek(), "Expected identifier for struct field name.");
+                    }
+                    token::Token key_token = consume();
+                    auto key_identifier = std::make_unique<ast::Identifier>(key_token.location, key_token.lexeme);
+                    
+                    vyn::ast::ExprPtr value = nullptr; 
+
+                    if (match(TokenType::COLON) || match(TokenType::EQ)) {
+                        // Check for missing value after ':' or '='
+                        if (check(TokenType::COMMA) || check(TokenType::RBRACE)) {
+                            throw error(peek(), "Expected expression for struct field value after ':' or '='.");
+                        }
+                        value = parse_expression();
+                    } else {
+                        // Shorthand: { fieldName }
+                        // AST.md: value is optional (null).
+                    }
+                    properties.emplace_back(key_token.location, std::move(key_identifier), std::move(value));
+
+                    if (match(TokenType::COMMA)) {
+                        if (check(TokenType::RBRACE)) { // Trailing comma: { a:1, }
+                            break; 
+                        }
+                        // Comma consumed, expect another property. If next is not IDENTIFIER, it's an error.
+                        if (peek().type != TokenType::IDENTIFIER) {
+                             throw error(peek(), "Expected identifier for struct field name after comma.");
+                        }
+                    } else {
+                        break; // No comma, so this must be the last property
+                    }
+                }
+            }
+            expect(TokenType::RBRACE);
+            return std::make_unique<ast::ObjectLiteral>(struct_loc, nullptr, std::move(properties));
+        }
+
+        throw error(peek(), "Expected primary expression.");
     }
 
     // Parses literal expressions (integers, floats, strings, booleans, null)
@@ -188,6 +402,23 @@ namespace vyn {
             vyn::ast::ExprPtr operand = parse_unary_expr(); 
             return std::make_unique<ast::UnaryExpression>(op_token.location, op_token, std::move(operand));
         }
+        // Attempt to parse TypeNode for potential constructor call or array initialization `[Type; Size]()`
+        // This is a lookahead. We try to parse a type. If it fails, or if it's not followed by
+        // '(' or by '; expr ) ( )', then we backtrack and parse as a normal primary expression.
+        // This is complex because a TypeName can be a simple Identifier, which parse_primary also handles.
+
+        // Create a TypeParser instance. Assuming it's part of the same parser structure
+        // and can be instantiated or accessed here. For now, let's assume we can create it.
+        // This requires TypeParser to be available and to have a parse_type_annotation() method.
+        // If TypeParser is not designed to be used this way (e.g., it's part of a DeclarationParser),
+        // this approach needs rethinking. For now, we'll assume it's usable.
+
+        // Store current position to backtrack if type parsing isn't part of a constructor/array init
+        size_t before_type_parse_pos = pos_;
+        // It's tricky to integrate TypeParser here directly without knowing its interface
+        // and how it handles errors or non-matches. A simple Identifier check might be
+        // a first step, then extending to full TypeParser if an LPAREN follows.
+
         return parse_postfix_expr();
     }
 
@@ -196,13 +427,64 @@ namespace vyn {
 
         while (true) {
             if (match(TokenType::LPAREN)) {
-                expr = parse_call_expression(std::move(expr));
+                // Could be a normal function call OR a TypeName()
+                // If 'expr' is an Identifier or a MemberExpression that resolves to a type name,
+                // it could be a constructor call.
+                // For now, we assume parse_primary correctly identifies TypeName as an Identifier
+                // or MemberExpression. We need a way to distinguish TypeName(...) from funcName(...).
+                // This might require semantic information or a syntactic marker.
+                // If 'expr' is an ast::Identifier, we can try to parse it as a TypeNode first.
+                // This is a simplification. A full solution would involve trying to parse a TypeNode
+                // at the beginning of parse_primary or here, and if successful and followed by '(',
+                // treat it as ConstructionExpression.
+
+                if (auto ident_expr = dynamic_cast<ast::Identifier*>(expr.get())) {
+                    // Check if this identifier could be a type name for a constructor call
+                    // This is a heuristic. A more robust way would be to attempt to parse a TypeNode
+                    // and if successful and followed by '(', then it's a ConstructionExpression.
+                    // For now, if an Identifier is followed by '(', we'll assume it could be a constructor.
+                    // We'll need to refine this. The problem is distinguishing `MyType()` from `myFunc()`.
+                    // A simple heuristic: if the identifier is capitalized, it might be a type.
+                    // This is not robust. Vyn might not have this convention.
+
+                    // Let's assume for now that if parse_primary returned an Identifier,
+                    // and it's followed by '(', it's a regular call. Construction calls
+                    // like `MyType(...)` will need to be parsed more explicitly, perhaps by
+                    // having parse_primary or a new function try to parse a TypeNode first.
+                    // The current structure makes it hard to distinguish without more context
+                    // or a change in how primary expressions involving types are parsed.
+
+                    // For the task: `TypeName(arguments)`
+                    // We need to parse `TypeName` as a `TypeNode`.
+                    // If `expr` is an `Identifier` or `MemberExpression` that could be a type path.
+                    // This is where `TypeParser` would be helpful.
+
+                    // Let's assume `parse_primary` is modified to detect `TypeName LPAREN` directly
+                    // or this function is structured to try parsing a TypeNode first.
+                    // Given the current structure, we'll stick to `parse_call_expression` for now
+                    // and address `TypeName()` parsing in `parse_primary` or a dedicated function.
+                    expr = parse_call_expression(std::move(expr));
+                } else if (auto member_expr = dynamic_cast<ast::MemberExpression*>(expr.get())) {
+                    // Could be module.Type()
+                     expr = parse_call_expression(std::move(expr));
+                } else {
+                    // If it's not an identifier or member access, it's a regular call on an expression value
+                    expr = parse_call_expression(std::move(expr));
+                }
             } else if (match(TokenType::DOT)) {
                 expr = parse_member_access(std::move(expr));
             } else if (match(TokenType::LBRACKET)) {
+                // Array subscript or potentially start of `[Type; Size]()` if `expr` was empty/placeholder
+                // This part needs to be careful. If `expr` is a valid expression, it's a subscript.
+                // The `[Type; Size]()` form starts with `LBRACKET` directly, handled in `parse_primary`.
                 // this->errors.push_back("Array subscript operator not yet implemented at " + location_to_string(previous_token().location));
-                throw std::runtime_error("Array subscript operator not yet implemented at " + location_to_string(previous_token().location));
-                expect(TokenType::RBRACKET); 
+                // For now, assume it's an array element access, not array initialization.
+                // The array initialization `[Type; Size]()` should be parsed in `parse_primary`
+                // because it starts with `[` and doesn't have a preceding expression.
+                SourceLocation op_loc = previous_token().location;
+                vyn::ast::ExprPtr index_expr = parse_expression();
+                expect(TokenType::RBRACKET);
+                expr = std::make_unique<ast::ArrayElementExpression>(op_loc, std::move(expr), std::move(index_expr));
             } else {
                 break;
             }
@@ -236,13 +518,17 @@ namespace vyn {
         // For example, if expressions can start with keywords like 'new', 'await', etc.
         // or specific operators for unary expressions.
         return is_literal(type) ||
-               type == TokenType::IDENTIFIER ||
+               type == TokenType::IDENTIFIER || // Covers plain identifiers and typed struct literals like `MyType { ... }`
                type == TokenType::LPAREN || // Grouped expression
                type == TokenType::MINUS ||  // Unary minus
                type == TokenType::BANG ||   // Unary not
                type == TokenType::TILDE ||  // Unary bitwise not
-               type == TokenType::LBRACKET || // Array literal (if supported)
-               type == TokenType::LBRACE;   // Object literal or block (requires context)
+               type == TokenType::LBRACKET || // Array literal
+               type == TokenType::LBRACE ||   // Anonymous Struct literal { ... }
+               type == TokenType::KEYWORD_FN || // Function expression/lambda
+               type == TokenType::KEYWORD_IF; // If expression
+        // Removed KEYWORD_AWAIT as it's not in primary expressions per AST.md and not in token.hpp
+        // Removed KEYWORD_NEW as it's not in token.hpp and not a primary expression start per AST.md
     }
 
 } // namespace vyn

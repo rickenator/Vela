@@ -159,13 +159,14 @@ unary_expression       ::= ( '!' | '-' | '+' | '*' | 'await' | 'throw' ) unary_e
 primary_expression     ::= literal
                          | path_expression
                          | '(' expression ')'
-                         | call_expression
+                         | call_expression          // If callee is a type (path_expression), yields ConstructionExpression
                          | member_access_expression
                          | index_access_expression
                          | list_comprehension
-                         | array_literal
+                         | array_literal            // For [elem1, elem2] and [elem; count]
+                         | array_construction       // For [Type; Size]() for default initialization
                          | tuple_literal
-                         | struct_literal
+                         | struct_literal           // For TypeName{...} and anonymous {...}
                          | lambda_expression
                          | 'self' | 'super'
                          // if_expression is now part of conditional_expression
@@ -183,14 +184,13 @@ member_access_expression ::= primary_expression ( '.' | '?.' | '::' ) IDENTIFIER
 index_access_expression  ::= primary_expression '[' expression ']' [ '?' ]
 
 list_comprehension     ::= '[' expression 'for' pattern 'in' expression [ 'if' expression ] ']'
-array_literal          ::= '[' [ expression { ',' expression } [','] ] ']'
-                         | '[' type ';' expression ']' // This is array *type* in Type System, here it's literal [value; count]
-                         | '[' expression ';' expression ']' // value; count
-                         | array_type '(' [ argument_list ] ')' // For [Type; size]() like calls
+array_literal          ::= '[' [ expression { ',' expression } [','] ] ']'  // e.g., [elem1, elem2, ...]
+                         | '[' expression ';' expression ']'                // e.g., [value; count]
+array_construction     ::= ArrayType '(' ')' // Default initialization, e.g., [Int; 10]()
 
 tuple_literal          ::= '(' [ expression { ',' expression } [ ',' ] ] ')'
 
-struct_literal         ::= path_expression '{' [ struct_literal_field { ',' struct_literal_field } [ ',' ] ] '}'
+struct_literal         ::= [ path_expression ] '{' [ struct_literal_field { ',' struct_literal_field } [ ',' ] ] '}' // Allows TypeName{...} and anonymous {...}
 struct_literal_field   ::= IDENTIFIER (':' | '=') expression | IDENTIFIER // Allow = for field init
 
 lambda_expression      ::= [ 'async' ] ( '|' [ parameter_list ] '|' | IDENTIFIER ) [ '->' type ] ( '=>' expression | block_statement )
@@ -241,6 +241,7 @@ BorrowExpr             ::= 'borrow' '(' Expression ')'
 // - `let` vs `var`: `let` and `let mut` added to `variable_declaration`.
 // - `if-expression`: Added to `conditional_expression`.
 // - `statement_without_block`: Helper for `if` statements with non-block consequents.
+// - Constructor calls: A `call_expression` of the form `TypeName ( arguments )`, where `TypeName` is a `path_expression` resolving to a type, is parsed as a `ConstructionExpression`.
 //
 // Note on 'box' keyword and 'while let':
 // The 'box' keyword for heap allocation (e.g., 'box Type { ... }') and the

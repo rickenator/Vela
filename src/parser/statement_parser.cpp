@@ -30,6 +30,7 @@ vyn::ast::StmtPtr StatementParser::parse() {
     switch (current_token.type) {
         case vyn::TokenType::KEYWORD_LET:
         case vyn::TokenType::KEYWORD_MUT:
+        case vyn::TokenType::KEYWORD_CONST: // Added KEYWORD_CONST here
             return parse_var_decl();
         case vyn::TokenType::KEYWORD_IF:
             return parse_if();
@@ -199,10 +200,18 @@ std::unique_ptr<vyn::ast::ReturnStatement> StatementParser::parse_return() {
 std::unique_ptr<vyn::ast::VariableDeclaration> StatementParser::parse_var_decl() {
     SourceLocation keyword_loc = this->peek().location;
     bool is_mutable = false;
+    bool is_const = false; // Added for const
     if (this->match(vyn::TokenType::KEYWORD_MUT)) {
         is_mutable = true;
+    } else if (this->match(vyn::TokenType::KEYWORD_CONST)) { // Added else if for CONST
+        is_const = true;
     } else {
-        this->expect(vyn::TokenType::KEYWORD_LET, "Expected 'let' or 'mut' for variable declaration.");
+        this->expect(vyn::TokenType::KEYWORD_LET, "Expected 'let', 'mut', or 'const' for variable declaration.");
+        // Assuming 'let' implies const unless 'mut' is specified, adjust if 'let' is non-const by default
+        // For now, if it's 'let', it's not mutable. If is_const should be true for 'let', set it here.
+        // Based on typical language design, 'let' is often const by default.
+        // Let's assume 'let' means constant for now, matching the VariableDeclaration isConst logic.
+        is_const = true; 
     }
 
     vyn::token::Token name_token = this->expect(vyn::TokenType::IDENTIFIER, "Expected variable name.");
@@ -244,9 +253,9 @@ std::unique_ptr<vyn::ast::VariableDeclaration> StatementParser::parse_var_decl()
     auto var_id_node = std::make_unique<vyn::ast::Identifier>(name_token.location, var_name);
 
     return std::make_unique<vyn::ast::VariableDeclaration>(
-        keyword_loc, // start location is 'let' or 'mut'
+        keyword_loc, // start location is 'let' or 'mut' or 'const'
         std::move(var_id_node), // Pass the Identifier node
-        !is_mutable, // isConst is the opposite of is_mutable
+        is_const, // Use the is_const flag
         std::move(type_expr),
         std::move(initializer)
         // end_loc is implicitly handled by the base Node class or should be set if VariableDeclaration needs it explicitly
@@ -265,6 +274,7 @@ bool StatementParser::is_statement_start(vyn::TokenType type) const {
     switch (type) {
         case vyn::TokenType::KEYWORD_LET:
         case vyn::TokenType::KEYWORD_MUT:
+        case vyn::TokenType::KEYWORD_CONST: // Added KEYWORD_CONST here
         case vyn::TokenType::KEYWORD_IF:
         case vyn::TokenType::KEYWORD_WHILE:
         case vyn::TokenType::KEYWORD_FOR:
