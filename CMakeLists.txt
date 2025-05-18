@@ -90,7 +90,7 @@ add_executable(vyn_parser
 
 target_include_directories(vyn_parser PRIVATE
     include # Project's own include directory
-    ${LLVM_INCLUDE_DIRS} # Added LLVM include directories
+    SYSTEM ${LLVM_INCLUDE_DIRS} # Treat LLVM includes as system headers
 )
 
 add_definitions(${LLVM_DEFINITIONS}) # Added LLVM definitions
@@ -102,7 +102,12 @@ target_link_libraries(vyn_parser PRIVATE
 )
 
 # Add debug flags for tests.cpp
-set_source_files_properties(src/tests.cpp PROPERTIES COMPILE_FLAGS "-Wall -Wextra -DDEBUG_TESTS -DVERBOSE")
+# Ignore warnings originating from LLVM headers.
+# set_source_files_properties(src/tests.cpp PROPERTIES COMPILE_FLAGS "-Wall -Wextra -DDEBUG_TESTS -DVERBOSE")
+# Or silence warnings from LLVM headers, and possibly from the test itself.
+set_source_files_properties(src/tests.cpp PROPERTIES COMPILE_FLAGS "-DDEBUG_TESTS -DVERBOSE")
+
+
 
 # Enable verbose debugging for all parser files when needed
 # Uncomment these lines to enable verbose debugging for the entire project
