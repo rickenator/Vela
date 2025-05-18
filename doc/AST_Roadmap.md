@@ -1,5 +1,4 @@
 <!-- filepath: /home/rick/Projects/Vyn/doc/AST_Roadmap.md -->
-<!-- Test modification May 18 -->
 # Vyn AST: Roadmap and Planned Features
 
 This document outlines planned features, future extensions, and areas for improvement for the Vyn Abstract Syntax Tree (AST). It incorporates items previously marked as "planned" in the original `AST.md` and addresses review suggestions related to future development (like Suggestion 10).
@@ -115,6 +114,41 @@ This section consolidates nodes that were previously mentioned as "planned" or a
         *   `TypeNodePtr constrainedType` // e.g., a `GenericTypeNode` representing 'T'
         *   `std::vector<TypeNodePtr> bounds` // e.g., `GenericTypeNode`s representing trait names like 'Printable', 'Iterable'
 *   **Action:** Design and implement these nodes in `ast.hpp`/`ast.cpp`. Update `NodeType`, integrate with the `Visitor` pattern, and develop parsing rules for trait definitions and usage.
+
+### 1.10. Low-Level Pointer Intrinsics and Operations
+
+*   **Status:** Planned. Implement them in `src/vre/intrinsics.cpp`.
+*   **Description:** Provides low-level control over memory and pointers, essential for systems programming and optimization.
+*   **Key Intrinsics:**
+    *   `offset<T>(ptr: *T, count: isize) -> *T`: Computes a new pointer by offsetting `ptr` by `count` elements of type `T`. Handles pointer arithmetic correctly.
+    *   `is_nil<T>(ptr: *T) -> bool`: Checks if a pointer is null or nil.
+    *   `mem_copy<T>(dest: *mut T, src: *const T, count: usize)`: Copies `count` elements of type `T` from `src` to `dest`. Similar to `memcpy`.
+        *   Consideration: Overlap semantics (like `memmove` vs `memcpy`). Default to non-overlapping, provide `mem_move` if needed.
+    *   `mem_set<T>(dest: *mut T, value_byte: u8, count: usize)`: Sets `count` bytes starting at `dest` to `value_byte`. Similar to `memset`.
+        *   Note: `count` is in bytes, not elements of `T`.
+    *   `atomic_load<T>(ptr: *const T, ordering: AtomicOrdering) -> T`: Atomically loads a value of type `T` from `ptr`.
+    *   `atomic_store<T>(ptr: *mut T, value: T, ordering: AtomicOrdering)`: Atomically stores `value` of type `T` to `ptr`.
+    *   `atomic_exchange<T>(ptr: *mut T, value: T, ordering: AtomicOrdering) -> T`: Atomically exchanges the value at `ptr` with `value`.
+    *   `atomic_compare_exchange<T>(ptr: *mut T, expected: T, desired: T, success_ordering: AtomicOrdering, failure_ordering: AtomicOrdering) -> (T, bool)`: Atomically compares the value at `ptr` with `expected`, and if equal, replaces it with `desired`. Returns the original value and a boolean indicating success.
+    *   `fence(ordering: AtomicOrdering)`: Establishes memory ordering constraints between operations before and after the fence.
+    *   `volatile_load<T>(ptr: *const T) -> T`: Performs a volatile load from `ptr`.
+    *   `volatile_store<T>(ptr: *mut T, value: T)`: Performs a volatile store to `ptr`.
+    *   `asm(...)`: Allows embedding platform-specific assembly code. Syntax and capabilities TBD.
+*   **Action:** Define these intrinsic functions, their precise signatures, and semantics. Integrate them into the VRE and expose them to the language.
+
+### 1.11. General-Purpose Language Intrinsics
+
+*   **Status:** Planned. Implement them in `src/vre/intrinsics.cpp`.
+*   **Description:** Core functions often provided by languages as built-ins or standard library essentials.
+*   **Key Intrinsics:**
+    *   `println(...)`: Prints a formatted string or values to the standard output, followed by a newline. (Variadic arguments or type-driven formatting TBD).
+    *   `print(...)`: Similar to `println` but without the trailing newline.
+    *   `assert(condition: bool, message: ?string)`: Asserts that a condition is true. If false, terminates the program, potentially printing an optional message.
+    *   `size_of<T>() -> usize` or `size_of(value: T) -> usize`: Returns the size of a type `T` or a value in bytes.
+    *   `align_of<T>() -> usize` or `align_of(value: T) -> usize`: Returns the alignment of a type `T` or a value in bytes.
+    *   `type_of<T>() -> TypeInfo` or `type_of(value: T) -> TypeInfo`: Returns runtime type information for a type or value. (Details of `TypeInfo` TBD).
+    *   `panic(message: string)`: Unconditionally terminates the program with a panic message.
+*   **Action:** Define these intrinsic functions, their signatures, and behavior. Integrate with the VRE.
 
 ## 2. AST Infrastructure and Tooling Enhancements
 
