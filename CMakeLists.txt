@@ -80,7 +80,7 @@ set(VRE_HEADERS
 # Main and tests
 set(MAIN_SOURCES src/main.cpp src/tests.cpp)
 
-add_executable(vyn_parser
+add_executable(vyn
     ${PARSER_SOURCES}
     ${PARSER_HEADERS}
     ${VRE_SOURCES}
@@ -88,7 +88,7 @@ add_executable(vyn_parser
     ${MAIN_SOURCES}
 )
 
-target_include_directories(vyn_parser PRIVATE
+target_include_directories(vyn PRIVATE
     include # Project's own include directory
     SYSTEM ${LLVM_INCLUDE_DIRS} # Treat LLVM includes as system headers
 )
@@ -96,7 +96,7 @@ target_include_directories(vyn_parser PRIVATE
 add_definitions(${LLVM_DEFINITIONS}) # Added LLVM definitions
 
 # Link libraries
-target_link_libraries(vyn_parser PRIVATE
+target_link_libraries(vyn PRIVATE
     Catch2::Catch2WithMain
     ${LLVM_LIBS} # Link against the mapped LLVM libraries
 )
