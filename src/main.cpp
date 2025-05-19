@@ -7,85 +7,160 @@
 #include <sstream>
 #include <vector>
 #include <string>
+#include <set> // For test and parser verbosity specifiers
+#include <algorithm> // For std::find
 
-int main(int argc, char** argv) {
-    std::cout << "./vyn_parser: Version: 0.3.0\n" << std::endl;
+// Globals for test verbose control
+std::set<std::string> g_verbose_test_specifiers;
+bool g_make_all_tests_verbose = false;
+bool g_suppress_all_debug_output = false;
 
-    bool run_tests = false;
-    bool show_success = false;
-    std::string filename;
+// Globals for parser verbose control
+namespace vyn {
+    std::set<std::string> g_verbose_parser_test_specifiers;
+    bool g_make_all_parser_verbose = false;
+    bool g_suppress_all_parser_debug_output = false;
+}
 
-    // Parse command-line arguments
-    std::vector<std::string> catch_args = {"vyn_parser"}; // Program name as argv[0]
+// Test comment by Copilot
+
+int main(int argc, char* argv[]) {
+    Catch::Session session; // Catch2 entry point
+
+    std::vector<std::string> catch_args;
+    catch_args.push_back(argv[0]); // Program name
+
+    bool next_arg_is_test_specifier_for_verbose = false;
+    bool test_mode_active = false;
+
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
         if (arg == "--test") {
-            run_tests = true;
-            // Skip adding --test to catch_args
-        } else if (arg == "--success") {
-            show_success = true;
-            catch_args.push_back("-s"); // Map --success to Catch2's -s (show successes)
-        } else if (arg[0] != '-') {
-            filename = arg;
-        } else {
-            catch_args.push_back(arg); // Pass other args to Catch2 (e.g., test filters)
+            test_mode_active = true;
+            // Enter test mode for Catch2; do not forward our own flag
+            continue;
+        } else if (arg == "--debug-verbose") {
+            if (i + 1 < argc) {
+                std::string specifiers_str = argv[++i];
+                if (specifiers_str == "all") {
+                    g_make_all_tests_verbose = true;
+                } else {
+                    // Parse comma-separated specifiers
+                    size_t start = 0;
+                    size_t end = specifiers_str.find(',');
+                    while (end != std::string::npos) {
+                        g_verbose_test_specifiers.insert(specifiers_str.substr(start, end - start));
+                        start = end + 1;
+                        end = specifiers_str.find(',', start);
+                    }
+                    g_verbose_test_specifiers.insert(specifiers_str.substr(start));
+                }
+            } else {
+                std::cerr << "Warning: --debug-verbose requires an argument (e.g., \"all\" or test_name,[tag])." << std::endl;
+            }
+        } else if (arg == "--no-debug-output") {
+            g_suppress_all_debug_output = true;
+        } else if (arg == "--debug-parser-verbose") {
+            if (i + 1 < argc) {
+                std::string spec_str = argv[++i];
+                if (spec_str == "all") {
+                    vyn::g_make_all_parser_verbose = true;
+                } else {
+                    size_t start = 0;
+                    size_t end = spec_str.find(',');
+                    while (end != std::string::npos) {
+                        vyn::g_verbose_parser_test_specifiers.insert(spec_str.substr(start, end - start));
+                        start = end + 1;
+                        end = spec_str.find(',', start);
+                    }
+                    vyn::g_verbose_parser_test_specifiers.insert(spec_str.substr(start));
+                }
+            } else {
+                std::cerr << "Warning: --debug-parser-verbose requires an argument." << std::endl;
+            }
+        } else if (arg == "--no-parser-debug-output") {
+            vyn::g_suppress_all_parser_debug_output = true;
+        }
+        else {
+            // If in test mode, or it\'s a general Catch2 arg, pass it along
+             catch_args.push_back(arg);
         }
     }
 
-    if (run_tests) {
-        // Convert string vector to char* array for Catch2
-        std::vector<char*> catch_argv;
-        for (auto& arg : catch_args) {
-            catch_argv.push_back(const_cast<char*>(arg.c_str()));
-        }
+    if (!test_mode_active && (g_make_all_tests_verbose || !g_verbose_test_specifiers.empty() || g_suppress_all_debug_output ||
+                              vyn::g_make_all_parser_verbose || !vyn::g_verbose_parser_test_specifiers.empty() || vyn::g_suppress_all_parser_debug_output)) {
+         std::cerr << "Warning: Debug verbosity flags (--debug-verbose, --no-debug-output, --debug-parser-verbose, --no-parser-debug-output) are intended for use with --test mode." << std::endl;
+    }
+    
+    // Convert std::vector<std::string> to char* array for Catch2
+    std::vector<char*> C_catch_args;
+    for(const auto& s : catch_args) {
+        C_catch_args.push_back(const_cast<char*>(s.c_str()));
+    }
 
-        // Run Catch2 tests
-        std::cout << "Running tests...\n";
-        Catch::Session session;
-        int result = session.run(catch_argv.size(), catch_argv.data());
+    int result = session.run(C_catch_args.size(), C_catch_args.data());
+
+    // If tests were run, we might want to exit here.
+    if (test_mode_active) {
         return result;
     }
 
-    if (filename.empty()) {
-        std::cerr << "Error: No input file specified.\n";
-        return 1;
+    // If not in test mode, proceed with original file processing logic
+    if (argc > 1) {
+        std::string filename = argv[1];
+        // ... (your existing file processing logic) ...
+        std::cout << "Processing file: " << filename << std::endl;
+         try {
+            std::ifstream file(filename);
+            if (!file.is_open()) {
+                std::cerr << "Error: Could not open file " << filename << std::endl;
+                return 1;
+            }
+            std::string source((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+            file.close();
+
+            Lexer lexer(source, filename);
+            auto tokens = lexer.tokenize();
+            
+            // Optional: Print tokens if verbose mode is somehow enabled globally (not typical for non-test runs)
+            // if (g_make_all_tests_verbose) { // Or some other global verbose flag
+            //     for (const auto& token : tokens) {
+            //         std::cout << vyn::token_type_to_string(token.type) << " (\'" << token.lexeme << "\')\\n";
+            //     }
+            // }
+
+            vyn::Parser parser(tokens, filename);
+            // if (g_make_all_tests_verbose) { // Or some other global verbose flag
+            //    parser.set_verbose(true);
+            // }
+            std::unique_ptr<vyn::ast::Module> ast = parser.parse_module();
+            
+            // vyn::SemanticAnalyzer sema;
+            // sema.analyze(ast.get());
+            // auto errors = sema.getErrors();
+            // if (!errors.empty()) {
+            //     for (const auto& err : errors) {
+            //         std::cerr << "Semantic Error: " << err << std::endl;
+            //     }
+            //     return 1; // Indicate semantic error
+            // }
+
+            // vyn::LLVMCodegen codegen;
+            // codegen.generate(ast.get(), "output.ll"); // Example output name
+            // std::cout << "LLVM IR generated to output.ll" << std::endl;
+
+
+        } catch (const std::exception& e) {
+            std::cerr << "Exception: " << e.what() << std::endl;
+            return 1;
+        }
+    } else {
+        std::cout << "Vyn Parser - Usage: " << argv[0] << " <filename> | --test [catch2_options]" << std::endl;
+        std::cout << "                 " << argv[0] << " --test --debug-verbose <all|test_name,[tag],...>" << std::endl;
+        std::cout << "                 " << argv[0] << " --test --no-debug-output" << std::endl;
+        std::cout << "                 " << argv[0] << " --test --debug-parser-verbose <all|test_name,[tag],...>" << std::endl;
+        std::cout << "                 " << argv[0] << " --test --no-parser-debug-output" << std::endl;
     }
 
-    // Read input file
-    std::ifstream file(filename);
-    if (!file.is_open()) {
-        std::cerr << "Error: Could not open file " << filename << ".\n";
-        return 1;
-    }
-
-    std::stringstream buffer;
-    buffer << file.rdbuf();
-    std::string source = buffer.str();
-
-    // Tokenize
-    Lexer lexer(source, filename); // Pass filename to Lexer constructor
-    std::vector<vyn::token::Token> tokens; // Changed Vyn::Token to vyn::token::Token
-    try {
-        tokens = lexer.tokenize();
-    } catch (const std::runtime_error& e) {
-        std::cerr << "Lexing error: " << e.what() << "\n";
-        return 1;
-    }
-
-    // Parse
-    vyn::Parser parser(tokens, filename); // Changed Vyn::Parser to vyn::Parser and pass filename
-    std::unique_ptr<vyn::ast::Module> ast; // Corrected to vyn::ast::Module
-    try {
-        ast = parser.parse_module(); // Changed to parse_module()
-    } catch (const std::runtime_error& e) {
-        std::cerr << "Parsing error: " << e.what() << "\n";
-        return 1;
-    }
-
-    // Print success if requested
-    if (show_success) {
-        std::cout << "Parsing successful.\n";
-    }
-
-    return 0;
+    return result; // Or 0 if not running tests and successful
 }

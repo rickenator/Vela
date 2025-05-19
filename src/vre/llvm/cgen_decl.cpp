@@ -435,23 +435,23 @@ void LLVMCodegen::visit(vyn::ast::EnumDeclaration* node) {
     m_currentLLVMValue = nullptr; // Enum declaration itself doesn't have a direct LLVM value in this model
 }
 
-void LLVMCodegen::visit(vyn::ast::EnumVariantNode* node) {
+void LLVMCodegen::visit(vyn::ast::EnumVariant* node) {
     // Visited as part of EnumDeclaration. Not typically standalone.
-    logError(node->loc, "EnumVariantNode visited standalone.");
+    logError(node->loc, "EnumVariant visited standalone.");
     m_currentLLVMValue = nullptr;
 }
 
-void LLVMCodegen::visit(vyn::ast::GenericParamNode* node) {
+void LLVMCodegen::visit(vyn::ast::GenericParameter* node) {
     // Generic parameters are resolved during template instantiation (monomorphization).
-    // Standalone codegen for a GenericParamNode is not typical.
-    logError(node->loc, "GenericParamNode visited standalone. Should be resolved during template instantiation.");
+    // Standalone codegen for a GenericParameter is not typical.
+    logError(node->loc, "GenericParameter visited standalone. Should be resolved during template instantiation.");
     m_currentLLVMValue = nullptr;
 }
 
-void LLVMCodegen::visit(vyn::ast::TemplateDeclarationNode* node) {
+void LLVMCodegen::visit(vyn::ast::TemplateDeclaration* node) {
     // Template declarations are blueprints. Code is generated when they are instantiated.
     // The codegen might store the template definition for later instantiation.
-    logError(node->loc, "TemplateDeclarationNode visited. Codegen happens on instantiation, not for the template itself.");
+    logError(node->loc, "TemplateDeclaration visited. Codegen happens on instantiation, not for the template itself.");
     m_currentLLVMValue = nullptr;
 }
 

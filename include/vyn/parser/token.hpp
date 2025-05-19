@@ -27,10 +27,13 @@ enum class TokenType {
     KEYWORD_MY, KEYWORD_OUR, KEYWORD_THEIR, KEYWORD_PTR, // New ownership keywords
     KEYWORD_BORROW, KEYWORD_VIEW, // Changed from BORROW_MUT
     KEYWORD_NIL, // Added for nil literal
+    KEYWORD_UNSAFE, // Added for unsafe blocks
 
     // Operators
     PLUS, MINUS, MULTIPLY, DIVIDE, MODULO, EQ, EQEQ, NOTEQ, LT, GT, LTEQ, GTEQ,
     AND, OR, BANG, AMPERSAND, PIPE, CARET, TILDE, LSHIFT, RSHIFT, DOTDOT,
+    PLUSEQ, MINUSEQ, MULTIPLYEQ, DIVEQ, MODEQ, LSHIFTEQ, RSHIFTEQ,
+    BITWISEANDEQ, BITWISEOREQ, BITWISEXOREQ, COLONEQ, // Compound assignment and colon-equals
 
     // Punctuation
     LPAREN, RPAREN, LBRACE, RBRACE, LBRACKET, RBRACKET, COMMA, DOT, COLON,
@@ -42,7 +45,8 @@ enum class TokenType {
     COMMENT,
     NEWLINE,
     INDENT,
-    DEDENT
+    DEDENT,
+    ILLEGAL // Added for illegal/error tokens
 };
 
 std::string token_type_to_string(TokenType type);

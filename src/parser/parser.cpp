@@ -16,7 +16,7 @@ Parser::Parser(const std::vector<vyn::token::Token>& tokens, std::string file_pa
       base_parser_(tokens_, current_pos_, file_path_),
       expression_parser_(tokens_, current_pos_, file_path_),
       type_parser_(tokens_, current_pos_, file_path_, expression_parser_),
-      statement_parser_(tokens_, current_pos_, 0, file_path_, type_parser_, expression_parser_),
+      statement_parser_(tokens_, current_pos_, 0, file_path_, type_parser_, expression_parser_, &declaration_parser_ ),
       declaration_parser_(tokens_, current_pos_, file_path_, type_parser_, expression_parser_, statement_parser_),
       module_parser_(tokens_, current_pos_, file_path_, declaration_parser_) {}
 

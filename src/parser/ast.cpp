@@ -6,7 +6,7 @@
 #include <vector>
 #include <algorithm>
 #include <stdexcept>
-#include "vyn/parser/ast.hpp"
+#include "vyn/parser/ast.hpp" // This now includes iostream, BorrowKind, OwnershipKind
 #include "vyn/parser/token.hpp"
 
 namespace vyn {
@@ -20,7 +20,7 @@ ObjectLiteral::ObjectLiteral(SourceLocation loc, TypeNodePtr typePath, std::vect
     : Expression(loc), typePath(std::move(typePath)), properties(std::move(properties)) {}
 
 NodeType ObjectLiteral::getType() const {
-    return NodeType::OBJECT_LITERAL_NODE;
+        return NodeType::OBJECT_LITERAL;
 }
 
 std::string ObjectLiteral::toString() const {
@@ -142,18 +142,25 @@ void TryStatement::accept(Visitor& visitor) {
 // --- ImportDeclaration methods ---
 ImportDeclaration::ImportDeclaration(
     SourceLocation loc,
-    std::unique_ptr<StringLiteral> source,
-    std::vector<ImportSpecifier> specifiers,
-    std::unique_ptr<Identifier> defaultImport,
-    std::unique_ptr<Identifier> namespaceImport)
+    std::unique_ptr<StringLiteral> source_param, // Renamed to avoid conflict with member
+    std::vector<ImportSpecifier> specifiers_param,
+    std::unique_ptr<Identifier> defaultImport_param,
+    std::unique_ptr<Identifier> namespaceImport_param)
     : Declaration(loc),
-      source(std::move(source)),
-      specifiers(std::move(specifiers)),
-      defaultImport(std::move(defaultImport)),
-      namespaceImport(std::move(namespaceImport)) {}
+      source(std::move(source_param)),
+      specifiers(std::move(specifiers_param)),
+      defaultImport(std::move(defaultImport_param)),
+      namespaceImport(std::move(namespaceImport_param)) {}
 
 NodeType ImportDeclaration::getType() const { return NodeType::IMPORT_DECLARATION; }
-std::string ImportDeclaration::toString() const { return "ImportDeclaration"; }
+std::string ImportDeclaration::toString() const { 
+    std::stringstream ss;
+    ss << "ImportDeclaration(source=";
+    if (source) ss << source->toString(); else ss << "<null_source>";
+    // Add specifiers, defaultImport, namespaceImport to string if needed
+    ss << ")";
+    return ss.str();
+}
 void ImportDeclaration::accept(Visitor& v) { v.visit(this); }
 
 // --- STUBS for missing virtuals to resolve linker errors ---
@@ -238,9 +245,6 @@ IfStatement::~IfStatement() = default;
 WhileStatement::~WhileStatement() = default;
 ForStatement::~ForStatement() = default;
 ReturnStatement::~ReturnStatement() = default;
-VariableDeclaration::~VariableDeclaration() = default;
-FunctionDeclaration::~FunctionDeclaration() = default;
-TypeAliasDeclaration::~TypeAliasDeclaration() = default;
 
 // --- Expression Nodes ---
 CallExpression::CallExpression(SourceLocation loc, ExprPtr callee, std::vector<ExprPtr> arguments)
@@ -374,12 +378,12 @@ void ArrayLiteral::accept(Visitor& visitor) { // Renamed from ArrayLiteralNode
 
 std::string ArrayLiteral::toString() const { // Renamed from ArrayLiteralNode
     std::stringstream ss;
-    ss << \"ArrayLiteral([\"; // Renamed from ArrayLiteralNode
+    ss << "ArrayLiteral(["; // Renamed from ArrayLiteralNode
     for (size_t i = 0; i < elements.size(); ++i) {
-        if (elements[i]) ss << elements[i]->toString(); else ss << \"<null_element>\";
-        if (i < elements.size() - 1) ss << \", \";
+        if (elements[i]) ss << elements[i]->toString(); else ss << "<null_element>";
+        if (i < elements.size() - 1) ss << ", ";
     }
-    ss << \"])\";
+    ss << "])";
     return ss.str();
 }
 
@@ -394,15 +398,13 @@ void BorrowExpression::accept(Visitor& visitor) { // Renamed from BorrowExprNode
 std::string BorrowExpression::toString() const { // Renamed from BorrowExprNode
     std::string prefix_str; // Renamed prefix to prefix_str
     switch (kind) {
-        case BorrowKind::MUTABLE_BORROW:
+        case BorrowKind::MUTABLE_BORROW: // Uses globally defined BorrowKind
             prefix_str = "borrow ";
             break;
-        case BorrowKind::IMMUTABLE_VIEW:
+        case BorrowKind::IMMUTABLE_VIEW: // Uses globally defined BorrowKind
             prefix_str = "view ";
             break;
-        default: 
-            prefix_str = "unknown_borrow_kind ";
-            break;
+        // default case removed as BorrowKind should always be one of the defined values
     }
     if (expression) {
         return prefix_str + expression->toString();
@@ -410,491 +412,438 @@ std::string BorrowExpression::toString() const { // Renamed from BorrowExprNode
     return prefix_str + "nullptr";
 }
 
-// --- TypeNode ---
-// Constructor implementation (if not already correct)
-TypeNode::TypeNode(SourceLocation loc_param, TypeNode::Category category_param, bool dataIsConst_param, bool isOptional_param) // Ensure TypeNode::Category is used
-    : Node(loc_param), category(category_param), loc(loc_param), dataIsConst(dataIsConst_param), isOptional(isOptional_param) {
-    // Initialize other members based on category if necessary, or rely on factory methods
-}
+// --- TypeNode and its derived classes ---
+// TypeNode base class does not have direct instantiations for its previous factory methods.
+// Those factory methods were creating TypeNode with a category and then populating specific fields.
+// Now, derived classes (TypeName, PointerType, etc.) should be instantiated directly.
+// The old TypeNode::toString() and TypeNode::accept() are now handled by derived classes.
 
-TypeNodePtr TypeNode::newIdentifier(SourceLocation loc_param, IdentifierPtr identifierName_param, std::vector<TypeNodePtr> genericArgs_param, bool dataIsConst_param, bool isOptional_param) {
-        auto node = std::make_unique<TypeNode>(loc_param, TypeNode::Category::IDENTIFIER, dataIsConst_param, isOptional_param); // Ensure TypeNode::Category is used
-        node->name = std::move(identifierName_param);
-        node->genericArguments = std::move(genericArgs_param);
-        return node;
+// TypeName
+TypeName::TypeName(SourceLocation loc, std::unique_ptr<Identifier> id, std::vector<TypeNodePtr> args)
+    : TypeNode(loc), identifier(std::move(id)), genericArgs(std::move(args)) {}
+
+NodeType TypeName::getType() const { return NodeType::TYPE_NAME; }
+
+std::string TypeName::toString() const {
+    std::string str_val;
+    if (identifier) { 
+        str_val += identifier->name;
+    } else {
+        str_val += "<unnamed_identifier_type>";
     }
-
-TypeNodePtr TypeNode::newTuple(SourceLocation loc_param, std::vector<TypeNodePtr> memberTypes_param, bool dataIsConst_param, bool isOptional_param) {
-    auto node = std::make_unique<TypeNode>(loc_param, TypeNode::Category::TUPLE, dataIsConst_param, isOptional_param); // Ensure TypeNode::Category is used
-    node->tupleElementTypes = std::move(memberTypes_param);
-    return node;
-}
-
-TypeNodePtr TypeNode::newArray(SourceLocation loc_param, TypeNodePtr elementType_param, ExprPtr sizeExpression_param, bool dataIsConst_param, bool isOptional_param) {
-    auto node = std::make_unique<TypeNode>(loc_param, TypeNode::Category::ARRAY, dataIsConst_param, isOptional_param); // Ensure TypeNode::Category is used
-    node->arrayElementType = std::move(elementType_param);
-    node->arraySizeExpression = std::move(sizeExpression_param);
-    return node;
-}
-
-TypeNodePtr TypeNode::newFunctionSignature(SourceLocation loc_param, std::vector<TypeNodePtr> params_param, TypeNodePtr retType_param, bool dataIsConst_param, bool isOptional_param) {
-    auto node = std::make_unique<TypeNode>(loc_param, TypeNode::Category::FUNCTION_SIGNATURE, dataIsConst_param, isOptional_param); // Ensure TypeNode::Category is used
-    node->functionParameters = std::move(params_param);
-    node->functionReturnType = std::move(retType_param);
-    return node;
-}
-
-TypeNodePtr TypeNode::newOwnershipWrapped(SourceLocation loc_param, OwnershipKind ownKind_param, TypeNodePtr wrapped_param, bool dataIsConst_param, bool isOptional_param) {
-    auto node = std::make_unique<TypeNode>(loc_param, TypeNode::Category::OWNERSHIP_WRAPPED, dataIsConst_param, isOptional_param); // Ensure TypeNode::Category is used
-    node->ownership = ownKind_param;
-    node->wrappedType = std::move(wrapped_param);
-    return node;
-}
-
-std::string TypeNode::toString() const {
-    std::string str_val; // Renamed str to str_val
-    if (this->dataIsConst) { // Explicit this->
-        str_val += "const ";
-    }
-
-    switch (this->category) { // Explicit this->
-        case TypeNode::Category::IDENTIFIER: // Ensure TypeNode::Category is used
-            if (this->name) { 
-                str_val += this->name->name;
-            } else {
-                str_val += "<unnamed_identifier_type>";
+    if (!genericArgs.empty()) {
+        str_val += "<";
+        for (size_t i = 0; i < genericArgs.size(); ++i) {
+            if (genericArgs[i]) str_val += genericArgs[i]->toString(); else str_val += "<null_gen_arg>";
+            if (i < genericArgs.size() - 1) {
+                str_val += ", ";
             }
-            if (!this->genericArguments.empty()) {
-                    str_val += "<";
-                for (size_t i = 0; i < this->genericArguments.size(); ++i) {
-                    if (this->genericArguments[i]) str_val += this->genericArguments[i]->toString(); else str_val += "<null_gen_arg>";
-                    if (i < this->genericArguments.size() - 1) {
-                        str_val += ", ";
-                    }
-                }
-                str_val += ">";
-            }
-            break;
-        case TypeNode::Category::TUPLE: // Ensure TypeNode::Category is used
-            str_val += "(";
-            for (size_t i = 0; i < this->tupleElementTypes.size(); ++i) {
-                if (this->tupleElementTypes[i]) str_val += this->tupleElementTypes[i]->toString();
-                else str_val += "<invalid_tuple_element_type>";
-                if (i < this->tupleElementTypes.size() - 1) {
-                    str_val += ", ";
-                }
-            }
-            str_val += ")";
-            break;
-        case TypeNode::Category::ARRAY: // Ensure TypeNode::Category is used
-            str_val += "[";
-            if (this->arrayElementType) str_val += this->arrayElementType->toString(); else str_val += "<invalid_array_element_type>";
-            if (this->arraySizeExpression) {
-                str_val += "; ";
-                str_val += this->arraySizeExpression->toString(); 
-            }
-            str_val += "]";
-            break;
-        case TypeNode::Category::FUNCTION_SIGNATURE: // Ensure TypeNode::Category is used
-            str_val += "fn(";
-            for (size_t i = 0; i < this->functionParameters.size(); ++i) {
-                if (this->functionParameters[i]) str_val += this->functionParameters[i]->toString();
-                else str_val += "<invalid_param_type>";
-                if (i < this->functionParameters.size() - 1) {
-                    str_val += ", ";
-                }
-            }
-            str_val += ")";
-            if (this->functionReturnType) {
-                str_val += " -> " + this->functionReturnType->toString();
-            } else {
-                str_val += " -> <void_or_inferred_return_type>";
-            }
-            break;
-        case TypeNode::Category::OWNERSHIP_WRAPPED: // Ensure TypeNode::Category is used
-            switch (this->ownership) {
-                case OwnershipKind::MY: str_val += "my<"; break;
-                case OwnershipKind::OUR: str_val += "our<"; break;
-                case OwnershipKind::THEIR: str_val += "their<"; break;
-                case OwnershipKind::PTR: str_val += "ptr<"; break;
-            }
-            if (this->wrappedType) str_val += this->wrappedType->toString() + ">"; else str_val += "<invalid_wrapped_type>>";
-            break;
-        default: // Added default case
-            str_val += "<unknown_type_category>";
-            break;
-    }
-
-    if (this->isOptional) { // Explicit this->
-        str_val += "?";
-    }
-    if (this->isPointer) { // Explicit this->
-        str_val += "*";
+        }
+        str_val += ">";
     }
     return str_val;
 }
 
-void TypeNode::accept(Visitor& visitor) {
-    visitor.visit(this);
+void TypeName::accept(Visitor& visitor) { visitor.visit(this); }
+
+// PointerType
+PointerType::PointerType(SourceLocation loc, TypeNodePtr pointee)
+    : TypeNode(loc), pointeeType(std::move(pointee)) {}
+
+NodeType PointerType::getType() const { return NodeType::POINTER_TYPE; }
+
+std::string PointerType::toString() const {
+    return "*" + (pointeeType ? pointeeType->toString() : "<null_pointee>");
 }
 
+void PointerType::accept(Visitor& visitor) { visitor.visit(this); }
 
-// --- New Declarations ---
+// ArrayType
+ArrayType::ArrayType(SourceLocation loc, TypeNodePtr elemType, ExprPtr sizeExpr)
+    : TypeNode(loc), elementType(std::move(elemType)), sizeExpression(std::move(sizeExpr)) {}
 
-// FieldDeclaration
-FieldDeclaration::FieldDeclaration(SourceLocation loc_param, std::unique_ptr<Identifier> n_param, TypeNodePtr tn_param, ExprPtr init_param, bool is_mut_param) // Renamed params
-    : Declaration(loc_param), name(std::move(n_param)), typeNode(std::move(tn_param)), initializer(std::move(init_param)), isMutable(is_mut_param) {}
+NodeType ArrayType::getType() const { return NodeType::ARRAY_TYPE; }
 
-NodeType FieldDeclaration::getType() const {
-    return NodeType::FIELD_DECLARATION;
-}
-
-std::string FieldDeclaration::toString() const {
-    std::stringstream ss;
-    ss << "FieldDeclaration(" << (this->isMutable ? "var " : "let ") << this->name->toString(); // Explicit this->
-    if (this->typeNode) ss << ": " << this->typeNode->toString(); else ss << ": <no_type_node>"; // Check typeNode
-    if (this->initializer) { // Explicit this->
-        ss << " = " << this->initializer->toString();
+std::string ArrayType::toString() const {
+    std::string str_val = "[";
+    if (elementType) str_val += elementType->toString(); else str_val += "<invalid_array_element_type>";
+    if (sizeExpression) {
+        str_val += "; ";
+        str_val += sizeExpression->toString(); 
     }
-    ss << ")";
-    return ss.str();
+    str_val += "]";
+    return str_val;
 }
 
-void FieldDeclaration::accept(Visitor& visitor) {
-    visitor.visit(this);
-}
+void ArrayType::accept(Visitor& visitor) { visitor.visit(this); }
 
-// StructDeclaration
-StructDeclaration::StructDeclaration(SourceLocation loc_param, std::unique_ptr<Identifier> n_param, std::vector<std::unique_ptr<GenericParamNode>> gp_param, std::vector<std::unique_ptr<FieldDeclaration>> f_param) // Renamed params
-    : Declaration(loc_param), name(std::move(n_param)), genericParams(std::move(gp_param)), fields(std::move(f_param)) {}
+// FunctionType
+FunctionType::FunctionType(SourceLocation loc, std::vector<TypeNodePtr> params, TypeNodePtr retType)
+    : TypeNode(loc), parameterTypes(std::move(params)), returnType(std::move(retType)) {}
 
-NodeType StructDeclaration::getType() const {
-    return NodeType::STRUCT_DECLARATION;
-}
+NodeType FunctionType::getType() const { return NodeType::FUNCTION_TYPE; }
 
-std::string StructDeclaration::toString() const {
-    std::stringstream ss;
-    ss << "StructDeclaration(" << this->name->toString(); // Explicit this->
-    if (!this->genericParams.empty()) { // Explicit this->
-        ss << "<";
-        for (size_t i = 0; i < this->genericParams.size(); ++i) {
-            if (this->genericParams[i]) ss << this->genericParams[i]->toString(); else ss << "<null_gen_param>";
-            if (i < this->genericParams.size() - 1) ss << ", ";
-        }
-        ss << ">";
-    }
-    ss << " {\\\\n"; 
-    for (const auto& field_item : this->fields) { // Explicit this->, renamed field to field_item
-        if (field_item) ss << "  " << field_item->toString() << ";\\\\n"; 
-    }
-    ss << "})";
-    return ss.str();
-}
-
-void StructDeclaration::accept(Visitor& visitor) {
-    visitor.visit(this);
-}
-
-// ClassDeclaration
-ClassDeclaration::ClassDeclaration(SourceLocation loc_param, std::unique_ptr<Identifier> n_param, std::vector<std::unique_ptr<GenericParamNode>> gp_param, std::vector<DeclPtr> m_param) // Renamed params
-    : Declaration(loc_param), name(std::move(n_param)), genericParams(std::move(gp_param)), members(std::move(m_param)) {}
-
-NodeType ClassDeclaration::getType() const {
-    return NodeType::CLASS_DECLARATION;
-}
-
-std::string ClassDeclaration::toString() const {
-    std::stringstream ss;
-    ss << "ClassDeclaration(" << this->name->toString(); // Explicit this->
-    if (!this->genericParams.empty()) { // Explicit this->
-        ss << "<";
-        for (size_t i = 0; i < this->genericParams.size(); ++i) {
-           if (this->genericParams[i]) ss << this->genericParams[i]->toString(); else ss << "<null_gen_param>";
-            if (i < this->genericParams.size() - 1) ss << ", ";
-        }
-        ss << ">";
-    }
-    ss << " {\\\\n"; 
-    for (const auto& member_item : this->members) { // Explicit this->, renamed member to member_item
-        if (member_item) ss << "  " << member_item->toString() << ";\\\\n"; 
-    }
-    ss << "})";
-    return ss.str();
-}
-
-void ClassDeclaration::accept(Visitor& visitor) {
-    visitor.visit(this);
-}
-
-// ImplDeclaration
-ImplDeclaration::ImplDeclaration(SourceLocation loc_param, TypeNodePtr selfType_param, std::vector<std::unique_ptr<FunctionDeclaration>> methods_param, std::unique_ptr<Identifier> name_param, std::vector<std::unique_ptr<GenericParamNode>> genericParams_param, TypeNodePtr traitType_param) // Renamed params
-    : Declaration(loc_param), name(std::move(name_param)), genericParams(std::move(genericParams_param)), selfType(std::move(selfType_param)), traitType(std::move(traitType_param)), methods(std::move(methods_param)) {}
-
-NodeType ImplDeclaration::getType() const {
-    return NodeType::IMPL_DECLARATION;
-}
-
-std::string ImplDeclaration::toString() const {
-    std::stringstream ss;
-    ss << "ImplDeclaration(";
-    if (this->name) { // Explicit this->
-        ss << this->name->toString() << " ";
-    }
-    if (!this->genericParams.empty()) { // Explicit this->
-        ss << "<";
-        for (size_t i = 0; i < this->genericParams.size(); ++i) {
-            if (this->genericParams[i]) ss << this->genericParams[i]->toString(); else ss << "<null_gen_param>";
-            if (i < this->genericParams.size() - 1) ss << ", ";
-        }
-        ss << "> ";
-    }
-    if (this->traitType) { // Explicit this->
-        ss << this->traitType->toString() << " for "; 
-    }
-    if (this->selfType) ss << this->selfType->toString(); else ss << "<no_self_type>"; // Check selfType
-    ss << " {\\\\n"; 
-    for (const auto& method_item : this->methods) { // Explicit this->, renamed method to method_item
-        if (method_item) ss << "  " << method_item->toString() << ";\\\\n"; 
-    }
-    ss << "})";
-    return ss.str();
-}
-
-void ImplDeclaration::accept(Visitor& visitor) {
-    visitor.visit(this);
-}
-
-// EnumVariant
-EnumVariant::EnumVariant(SourceLocation loc_param, std::unique_ptr<Identifier> n_param, std::vector<TypeNodePtr> tns_param) // Renamed from EnumVariantNode
-    : Node(loc_param), name(std::move(n_param)), associatedTypes(std::move(tns_param)) {}
-
-NodeType EnumVariant::getType() const { // Renamed from EnumVariantNode
-    return NodeType::ENUM_VARIANT;
-}
-
-std::string EnumVariant::toString() const { // Renamed from EnumVariantNode
-    std::stringstream ss;
-    ss << "EnumVariant(" << this->name->toString(); // Renamed from EnumVariantNode
-    if (!this->associatedTypes.empty()) { 
-        ss << "(";
-        for (size_t i = 0; i < this->associatedTypes.size(); ++i) { 
-            if (this->associatedTypes[i]) ss << this->associatedTypes[i]->toString(); else ss << "<null_assoc_type>";
-            if (i < this->associatedTypes.size() - 1) ss << ", ";
-        }
-        ss << ")";
-    }
-    ss << ")";
-    return ss.str();
-}
-
-void EnumVariant::accept(Visitor& visitor) { // Renamed from EnumVariantNode
-    visitor.visit(this);
-}
-
-// EnumDeclaration
-EnumDeclaration::EnumDeclaration(SourceLocation loc_param, std::unique_ptr<Identifier> n_param, std::vector<std::unique_ptr<GenericParamNode>> gp_param, std::vector<std::unique_ptr<EnumVariant>> vars_param) // Renamed from EnumVariantNode
-    : Declaration(loc_param), name(std::move(n_param)), genericParams(std::move(gp_param)), variants(std::move(vars_param)) {}
-
-NodeType EnumDeclaration::getType() const {
-    return NodeType::ENUM_DECLARATION;
-}
-
-std::string EnumDeclaration::toString() const {
-    std::stringstream ss;
-    ss << "EnumDeclaration(" << this->name->toString(); // Explicit this->
-    if (!this->genericParams.empty()) { // Explicit this->
-        ss << "<";
-        for (size_t i = 0; i < this->genericParams.size(); ++i) {
-            if (this->genericParams[i]) ss << this->genericParams[i]->toString(); else ss << "<null_gen_param>";
-            if (i < this->genericParams.size() - 1) ss << ", ";
-        }
-        ss << ">";
-    }
-    ss << " {\\\\n"; 
-    for (const auto& variant_item : this->variants) { // Explicit this->, renamed variant to variant_item
-       if (variant_item) ss << "  " << variant_item->toString() << ",\\\\n"; 
-    }
-    ss << "})";
-    return ss.str();
-}
-
-void EnumDeclaration::accept(Visitor& visitor) {
-    visitor.visit(this);
-}
-
-// GenericParameter
-GenericParameter::GenericParameter(SourceLocation loc_param, std::unique_ptr<Identifier> n_param, std::vector<TypeNodePtr> b_param) // Renamed from GenericParamNode
-    : Node(loc_param), name(std::move(n_param)), bounds(std::move(b_param)) {}
-
-NodeType GenericParameter::getType() const { // Renamed from GenericParamNode
-    return NodeType::GENERIC_PARAMETER;
-}
-
-std::string GenericParameter::toString() const { // Renamed from GenericParamNode
-    std::stringstream ss;
-    ss << "GenericParameter(" << this->name->toString(); // Renamed from GenericParamNode
-    if (!this->bounds.empty()) { 
-        ss << ": ";
-        for (size_t i = 0; i < this->bounds.size(); ++i) {
-            if (this->bounds[i]) ss << this->bounds[i]->toString(); else ss << "<null_bound>";
-            if (i < this->bounds.size() - 1) ss << " + ";
-        }
-    }
-    ss << ")";
-    return ss.str();
-}
-
-void GenericParameter::accept(Visitor& visitor) { // Renamed from GenericParamNode
-    visitor.visit(this);
-}
-
-// TemplateDeclaration
-TemplateDeclaration::TemplateDeclaration(SourceLocation loc_param, std::unique_ptr<Identifier> name_param, std::vector<std::unique_ptr<GenericParameter>> generic_params_param, DeclPtr body_param) // Renamed from TemplateDeclarationNode
-    : Declaration(loc_param), name(std::move(name_param)), genericParams(std::move(generic_params_param)), body(std::move(body_param)) {}
-
-NodeType TemplateDeclaration::getType() const { // Renamed from TemplateDeclarationNode
-    return NodeType::TEMPLATE_DECLARATION;
-}
-
-std::string TemplateDeclaration::toString() const { // Renamed from TemplateDeclarationNode
-    std::string str_val = "template " + this->name->name + "<"; 
-    for (size_t i = 0; i < this->genericParams.size(); ++i) { 
-        if (this->genericParams[i]) {
-            str_val += this->genericParams[i]->name->name; 
-            if (!this->genericParams[i]->bounds.empty()) {
-                str_val += ": ";
-                for (size_t j = 0; j < this->genericParams[i]->bounds.size(); ++j) {
-                    if (this->genericParams[i]->bounds[j]) str_val += this->genericParams[i]->bounds[j]->toString(); else str_val += "<null_bound>";
-                    if (j < this->genericParams[i]->bounds.size() - 1) {
-                        str_val += " + ";
-                    }
-                }
-            }
-        } else {
-            str_val += "<null_gen_param>";
-        }
-        if (i < this->genericParams.size() - 1) {
+std::string FunctionType::toString() const {
+    std::string str_val = "fn(";
+    for (size_t i = 0; i < parameterTypes.size(); ++i) {
+        if (parameterTypes[i]) str_val += parameterTypes[i]->toString();
+        else str_val += "<invalid_param_type>";
+        if (i < parameterTypes.size() - 1) {
             str_val += ", ";
         }
     }
-    str_val += "> {\\\\n";
-    if (this->body) { 
-        str_val += this->body->toString(); 
+    str_val += ")";
+    if (returnType) {
+        str_val += " -> " + returnType->toString();
+    } else {
+        str_val += " -> <void_or_inferred_return_type>"; // Or just omit if void is implied
     }
-    str_val += "\\\\n}";
     return str_val;
 }
 
-void TemplateDeclaration::accept(Visitor& visitor) { // Renamed from TemplateDeclarationNode
-    visitor.visit(this);
+void FunctionType::accept(Visitor& visitor) { visitor.visit(this); }
+
+// OptionalType
+OptionalType::OptionalType(SourceLocation loc, TypeNodePtr contained)
+    : TypeNode(loc), containedType(std::move(contained)) {}
+
+NodeType OptionalType::getType() const { return NodeType::OPTIONAL_TYPE; }
+
+std::string OptionalType::toString() const {
+    return (containedType ? containedType->toString() : "<null_contained>") + "?";
 }
+
+void OptionalType::accept(Visitor& visitor) { visitor.visit(this); }
+
+// --- Implementation for TupleTypeNode --- // ADDED
+TupleTypeNode::TupleTypeNode(SourceLocation loc, std::vector<TypeNodePtr> members)
+    : TypeNode(loc), memberTypes(std::move(members)) {}
+
+NodeType TupleTypeNode::getType() const { return NodeType::TUPLE_TYPE; } // Corrected TUPLE_TYPE_NODE to TUPLE_TYPE
+
+std::string TupleTypeNode::toString() const {
+    std::string str = "(";
+    for (size_t i = 0; i < memberTypes.size(); ++i) {
+        str += memberTypes[i] ? memberTypes[i]->toString() : "null_type";
+        if (i < memberTypes.size() - 1) str += ", ";
+    }
+    str += ")";
+    return str;
+}
+
+void TupleTypeNode::accept(Visitor& visitor) { visitor.visit(this); }
+// --- End of TupleTypeNode Implementation --- // ADDED
+
+// --- GenericParameter ---
+vyn::ast::GenericParameter::GenericParameter(vyn::SourceLocation loc, std::unique_ptr<vyn::ast::Identifier> name, std::vector<vyn::ast::TypeNodePtr> bounds)
+    : Node(loc), name(std::move(name)), bounds(std::move(bounds)) {}
+
+vyn::ast::NodeType vyn::ast::GenericParameter::getType() const { return vyn::ast::NodeType::GENERIC_PARAMETER; }
+
+std::string vyn::ast::GenericParameter::toString() const {
+    std::string s = name ? name->toString() : "<null_name>";
+    if (!bounds.empty()) {
+        s += ": ";
+        for (size_t i = 0; i < bounds.size(); ++i) {
+            if (bounds[i]) {
+                s += bounds[i]->toString();
+            } else {
+                s += "<null_bound>";
+            }
+            if (i < bounds.size() - 1) {
+                s += " + "; // Assuming '+' for multiple bounds, adjust if syntax is different
+            }
+        }
+    }
+    return s;
+}
+
+void vyn::ast::GenericParameter::accept(vyn::ast::Visitor& visitor) { visitor.visit(this); }
+
+// --- FieldDeclaration ---
+vyn::ast::FieldDeclaration::FieldDeclaration(vyn::SourceLocation loc, std::unique_ptr<vyn::ast::Identifier> name, vyn::ast::TypeNodePtr typeNode, vyn::ast::ExprPtr initializer, bool isMutable)
+    : Declaration(loc), name(std::move(name)), typeNode(std::move(typeNode)), initializer(std::move(initializer)), isMutable(isMutable) {}
+
+vyn::ast::NodeType vyn::ast::FieldDeclaration::getType() const { return vyn::ast::NodeType::FIELD_DECLARATION; }
+
+std::string vyn::ast::FieldDeclaration::toString() const {
+    std::string s = name ? name->toString() : "<null_field_name>";
+    s += ": ";
+    s += typeNode ? typeNode->toString() : "<null_type>";
+    if (initializer) {
+        s += " = " + initializer->toString();
+    }
+    if (isMutable) {
+        s += " (mutable)";
+    }
+    return s;
+}
+
+void vyn::ast::FieldDeclaration::accept(vyn::ast::Visitor& visitor) { visitor.visit(this); }
+
+// --- StructDeclaration ---
+vyn::ast::StructDeclaration::StructDeclaration(vyn::SourceLocation loc, std::unique_ptr<vyn::ast::Identifier> name, std::vector<std::unique_ptr<vyn::ast::GenericParameter>> genericParams, std::vector<std::unique_ptr<vyn::ast::FieldDeclaration>> fields)
+    : Declaration(loc), name(std::move(name)), genericParams(std::move(genericParams)), fields(std::move(fields)) {}
+
+vyn::ast::NodeType vyn::ast::StructDeclaration::getType() const { return vyn::ast::NodeType::STRUCT_DECLARATION; }
+
+std::string vyn::ast::StructDeclaration::toString() const {
+    std::string s = "struct ";
+    s += name ? name->toString() : "<null_struct_name>";
+    // Add generic params and fields to string representation if needed
+    return s;
+}
+
+void vyn::ast::StructDeclaration::accept(vyn::ast::Visitor& visitor) { visitor.visit(this); }
+
+// --- ImplDeclaration ---
+vyn::ast::ImplDeclaration::ImplDeclaration(
+    vyn::SourceLocation loc,
+    vyn::ast::TypeNodePtr selfType,
+    std::vector<std::unique_ptr<vyn::ast::FunctionDeclaration>> methods,
+    std::unique_ptr<vyn::ast::Identifier> name,
+    std::vector<std::unique_ptr<vyn::ast::GenericParameter>> genericParams,
+    vyn::ast::TypeNodePtr traitType)
+    : Declaration(loc),
+      name(std::move(name)),
+      genericParams(std::move(genericParams)),
+      traitType(std::move(traitType)),
+      selfType(std::move(selfType)),
+      methods(std::move(methods)) {}
+
+vyn::ast::NodeType vyn::ast::ImplDeclaration::getType() const { return vyn::ast::NodeType::IMPL_DECLARATION; }
+
+std::string vyn::ast::ImplDeclaration::toString() const {
+    std::string s = "impl";
+    if (traitType) {
+        s += " " + traitType->toString();
+    }
+    s += " for " + (selfType ? selfType->toString() : "<null_self_type>");
+    // Add methods, generics etc. to string if needed
+    return s;
+}
+
+void vyn::ast::ImplDeclaration::accept(vyn::ast::Visitor& visitor) { visitor.visit(this); }
+
+// --- EnumVariant ---
+vyn::ast::EnumVariant::EnumVariant(vyn::SourceLocation loc, std::unique_ptr<vyn::ast::Identifier> name, std::vector<vyn::ast::TypeNodePtr> associatedTypes)
+    : Node(loc), name(std::move(name)), associatedTypes(std::move(associatedTypes)) {}
+
+vyn::ast::NodeType vyn::ast::EnumVariant::getType() const { return vyn::ast::NodeType::ENUM_VARIANT; }
+
+std::string vyn::ast::EnumVariant::toString() const {
+    std::string s = name ? name->toString() : "<null_variant_name>";
+    if (!associatedTypes.empty()) {
+        s += "(";
+        for (size_t i = 0; i < associatedTypes.size(); ++i) {
+            s += associatedTypes[i] ? associatedTypes[i]->toString() : "<null_type>";
+            if (i < associatedTypes.size() - 1) s += ", ";
+        }
+        s += ")";
+    }
+    return s;
+}
+
+void vyn::ast::EnumVariant::accept(vyn::ast::Visitor& visitor) { visitor.visit(this); }
+
+// --- EnumDeclaration ---
+vyn::ast::EnumDeclaration::EnumDeclaration(vyn::SourceLocation loc, std::unique_ptr<vyn::ast::Identifier> name, std::vector<std::unique_ptr<vyn::ast::GenericParameter>> genericParams, std::vector<std::unique_ptr<vyn::ast::EnumVariant>> variants)
+    : Declaration(loc), name(std::move(name)), genericParams(std::move(genericParams)), variants(std::move(variants)) {}
+
+vyn::ast::NodeType vyn::ast::EnumDeclaration::getType() const { return vyn::ast::NodeType::ENUM_DECLARATION; }
+
+std::string vyn::ast::EnumDeclaration::toString() const {
+    std::string s = "enum ";
+    s += name ? name->toString() : "<null_enum_name>";
+    // Add generic params and variants to string representation if needed
+    return s;
+}
+
+void vyn::ast::EnumDeclaration::accept(vyn::ast::Visitor& visitor) { visitor.visit(this); }
+
+// --- TemplateDeclaration ---
+// Note: ast.hpp has name, genericParams, body for TemplateDeclaration
+vyn::ast::TemplateDeclaration::TemplateDeclaration(vyn::SourceLocation loc, std::unique_ptr<vyn::ast::Identifier> name, std::vector<std::unique_ptr<vyn::ast::GenericParameter>> genericParams, vyn::ast::DeclPtr body)
+    : Declaration(loc), name(std::move(name)), genericParams(std::move(genericParams)), body(std::move(body)) {}
+
+vyn::ast::NodeType vyn::ast::TemplateDeclaration::getType() const { return vyn::ast::NodeType::TEMPLATE_DECLARATION; }
+
+std::string vyn::ast::TemplateDeclaration::toString() const {
+    std::string s = "template<";
+    for (size_t i = 0; i < genericParams.size(); ++i) {
+        s += genericParams[i] ? genericParams[i]->toString() : "<null_param>";
+        if (i < genericParams.size() - 1) s += ", ";
+    }
+    s += "> ";
+    s += name ? name->toString() : "<null_template_name>";
+    s += " " + (body ? body->toString() : "<null_body>");
+    return s;
+}
+
+void vyn::ast::TemplateDeclaration::accept(vyn::ast::Visitor& visitor) { visitor.visit(this); }
+
+// --- ClassDeclaration ---
+vyn::ast::ClassDeclaration::ClassDeclaration(vyn::SourceLocation loc, std::unique_ptr<vyn::ast::Identifier> name, std::vector<std::unique_ptr<vyn::ast::GenericParameter>> genericParams, std::vector<vyn::ast::DeclPtr> members)
+    : Declaration(loc), name(std::move(name)), genericParams(std::move(genericParams)), members(std::move(members)) {}
+
+vyn::ast::NodeType vyn::ast::ClassDeclaration::getType() const { return vyn::ast::NodeType::CLASS_DECLARATION; }
+
+std::string vyn::ast::ClassDeclaration::toString() const {
+    std::string s = "class ";
+    s += name ? name->toString() : "<null_class_name>";
+    // Add generic params and members to string representation if needed
+    return s;
+}
+
+void vyn::ast::ClassDeclaration::accept(vyn::ast::Visitor& visitor) { visitor.visit(this); }
+
+// --- IfExpression ---
+// ast.hpp: IfExpression(SourceLocation loc, ExprPtr condition, ExprPtr thenBranch, ExprPtr elseBranch);
+vyn::ast::IfExpression::IfExpression(vyn::SourceLocation loc, vyn::ast::ExprPtr condition, vyn::ast::ExprPtr thenBranch, vyn::ast::ExprPtr elseBranch)
+    : Expression(loc), condition(std::move(condition)), thenBranch(std::move(thenBranch)), elseBranch(std::move(elseBranch)) {}
+
+vyn::ast::NodeType vyn::ast::IfExpression::getType() const { return vyn::ast::NodeType::IF_EXPRESSION; }
+
+std::string vyn::ast::IfExpression::toString() const {
+    std::string s = "if (" + (condition ? condition->toString() : "<null_cond>") + ") ";
+    s += (thenBranch ? thenBranch->toString() : "<null_then>");
+    s += " else " + (elseBranch ? elseBranch->toString() : "<null_else>");
+    return s;
+}
+
+void vyn::ast::IfExpression::accept(vyn::ast::Visitor& visitor) { visitor.visit(this); }
 
 // --- ConstructionExpression ---
-ConstructionExpression::ConstructionExpression(SourceLocation loc, TypeNodePtr constructedType, std::vector<ExprPtr> arguments)
+// ast.hpp: ConstructionExpression(SourceLocation loc, TypeNodePtr constructedType, std::vector<ExprPtr> arguments);
+vyn::ast::ConstructionExpression::ConstructionExpression(vyn::SourceLocation loc, vyn::ast::TypeNodePtr constructedType, std::vector<vyn::ast::ExprPtr> arguments)
     : Expression(loc), constructedType(std::move(constructedType)), arguments(std::move(arguments)) {}
 
-NodeType ConstructionExpression::getType() const {
-    return NodeType::CONSTRUCTION_EXPRESSION;
-}
+vyn::ast::NodeType vyn::ast::ConstructionExpression::getType() const { return vyn::ast::NodeType::CONSTRUCTION_EXPRESSION; }
 
-std::string ConstructionExpression::toString() const {
-    std::stringstream ss;
-    if (constructedType) {
-        ss << constructedType->toString();
-    }
-    ss << "(";
+std::string vyn::ast::ConstructionExpression::toString() const {
+    std::string s = constructedType ? constructedType->toString() : "<null_type>";
+    s += "{";
     for (size_t i = 0; i < arguments.size(); ++i) {
-        if (arguments[i]) {
-            ss << arguments[i]->toString();
-        }
-        if (i < arguments.size() - 1) {
-            ss << ", ";
-        }
+        s += arguments[i] ? arguments[i]->toString() : "<null_arg>";
+        if (i < arguments.size() - 1) s += ", ";
     }
-    ss << ")";
-    return ss.str();
+    s += "}";
+    return s;
 }
 
-void ConstructionExpression::accept(Visitor& visitor) {
-    visitor.visit(this);
-}
+void vyn::ast::ConstructionExpression::accept(vyn::ast::Visitor& visitor) { visitor.visit(this); }
 
 // --- ArrayInitializationExpression ---
-ArrayInitializationExpression::ArrayInitializationExpression(SourceLocation loc, TypeNodePtr elementType, ExprPtr sizeExpression)
+// ast.hpp: ArrayInitializationExpression(SourceLocation loc, TypeNodePtr elementType, ExprPtr sizeExpression);
+vyn::ast::ArrayInitializationExpression::ArrayInitializationExpression(vyn::SourceLocation loc, vyn::ast::TypeNodePtr elementType, vyn::ast::ExprPtr sizeExpression)
     : Expression(loc), elementType(std::move(elementType)), sizeExpression(std::move(sizeExpression)) {}
 
-NodeType ArrayInitializationExpression::getType() const {
-    return NodeType::ARRAY_INITIALIZATION_EXPRESSION;
+vyn::ast::NodeType vyn::ast::ArrayInitializationExpression::getType() const { return vyn::ast::NodeType::ARRAY_INITIALIZATION_EXPRESSION; }
+
+std::string vyn::ast::ArrayInitializationExpression::toString() const {
+    return "[" + (elementType ? elementType->toString() : "<null_type>") + "; " + (sizeExpression ? sizeExpression->toString() : "<null_size>") + "]";
 }
 
-std::string ArrayInitializationExpression::toString() const {
-    std::stringstream ss;
-    ss << "[";
-    if (elementType) {
-        ss << elementType->toString();
+void vyn::ast::ArrayInitializationExpression::accept(vyn::ast::Visitor& visitor) { visitor.visit(this); }
+
+// --- PointerDerefExpression ---
+// ast.hpp: PointerDerefExpression(SourceLocation loc, ExprPtr pointer);
+// Member in hpp is 'pointer', not 'expr'
+vyn::ast::PointerDerefExpression::PointerDerefExpression(vyn::SourceLocation loc, vyn::ast::ExprPtr pointer)
+    : Expression(loc), pointer(std::move(pointer)) {}
+
+vyn::ast::NodeType vyn::ast::PointerDerefExpression::getType() const { return vyn::ast::NodeType::POINTER_DEREF_EXPRESSION; }
+
+std::string vyn::ast::PointerDerefExpression::toString() const {
+    return "*" + (pointer ? pointer->toString() : "<null_expr>");
+}
+
+void vyn::ast::PointerDerefExpression::accept(vyn::ast::Visitor& visitor) { visitor.visit(this); }
+
+// --- AddrOfExpression ---
+// ast.hpp: AddrOfExpression(SourceLocation loc, ExprPtr location);
+// Member in hpp is 'location', not 'expr'. No 'isMutable' in hpp constructor.
+// The header has:
+// class AddrOfExpression : public Expression {
+//     ExprPtr location;
+// public:
+//     AddrOfExpression(SourceLocation loc, ExprPtr location);
+// This implies isMutable might be part of the Type system or semantic analysis, not direct AST.
+// For now, matching the header strictly. If isMutable is needed, header must change.
+vyn::ast::AddrOfExpression::AddrOfExpression(vyn::SourceLocation loc, vyn::ast::ExprPtr location)
+    : Expression(loc), location(std::move(location)) {}
+
+vyn::ast::NodeType vyn::ast::AddrOfExpression::getType() const { return vyn::ast::NodeType::ADDR_OF_EXPRESSION; }
+
+std::string vyn::ast::AddrOfExpression::toString() const {
+    // Assuming '&' for immutable borrow by default if not specified otherwise in AST structure
+    return "&" + (location ? location->toString() : "<null_expr>");
+}
+
+void vyn::ast::AddrOfExpression::accept(vyn::ast::Visitor& visitor) { visitor.visit(this); }
+
+// --- FromIntToLocExpression ---
+// ast.hpp: FromIntToLocExpression(SourceLocation loc, ExprPtr address);
+// Member in hpp is 'address', not 'intExpr'. No 'targetType' in hpp constructor.
+vyn::ast::FromIntToLocExpression::FromIntToLocExpression(vyn::SourceLocation loc, vyn::ast::ExprPtr address)
+    : Expression(loc), address(std::move(address)) {}
+
+vyn::ast::NodeType vyn::ast::FromIntToLocExpression::getType() const { return vyn::ast::NodeType::FROM_INT_TO_LOC_EXPRESSION; }
+
+std::string vyn::ast::FromIntToLocExpression::toString() const {
+    // Target type is not part of this AST node per header, it's a semantic concept.
+    return "from_int_to_loc(" + (address ? address->toString() : "<null_address>") + ")";
+}
+
+void vyn::ast::FromIntToLocExpression::accept(vyn::ast::Visitor& visitor) { visitor.visit(this); }
+
+// --- GenericInstantiationExpression ---
+// ast.hpp: GenericInstantiationExpression(SourceLocation loc, ExprPtr base, std::vector<TypeNodePtr> args, SourceLocation lt_loc, SourceLocation gt_loc);
+// Members in hpp: baseExpression, genericArguments, lt_loc, gt_loc
+vyn::ast::GenericInstantiationExpression::GenericInstantiationExpression(vyn::SourceLocation loc, vyn::ast::ExprPtr base, std::vector<vyn::ast::TypeNodePtr> args, vyn::SourceLocation lt_loc, vyn::SourceLocation gt_loc)
+    : Expression(loc), baseExpression(std::move(base)), genericArguments(std::move(args)), lt_loc(lt_loc), gt_loc(gt_loc) {}
+
+vyn::ast::NodeType vyn::ast::GenericInstantiationExpression::getType() const { return vyn::ast::NodeType::GENERIC_INSTANTIATION_EXPRESSION; }
+
+std::string vyn::ast::GenericInstantiationExpression::toString() const {
+    std::string s = baseExpression ? baseExpression->toString() : "<null_base>";
+    s += "<";
+    for (size_t i = 0; i < genericArguments.size(); ++i) {
+        s += genericArguments[i] ? genericArguments[i]->toString() : "<null_arg>";
+        if (i < genericArguments.size() - 1) s += ", ";
     }
-    ss << "; ";
-    if (sizeExpression) {
-        ss << sizeExpression->toString();
-    }
-    ss << "]()";
-    return ss.str();
+    s += ">";
+    return s;
 }
 
-void ArrayInitializationExpression::accept(Visitor& visitor) {
-    visitor.visit(this);
+void vyn::ast::GenericInstantiationExpression::accept(vyn::ast::Visitor& visitor) { visitor.visit(this); }
+
+// --- UnsafeStatement ---
+// ast.hpp: UnsafeStatement(SourceLocation loc, std::unique_ptr<BlockStatement> blockStmt)
+// Member in hpp: block
+// toString() is already declared in hpp.
+std::string vyn::ast::UnsafeStatement::toString() const {
+    return "unsafe " + (block ? block->toString() : "{}");
 }
+// Accept and getType are already defined in hpp for UnsafeStatement via macro/inline or direct definition.
+// If they were meant to be out-of-line:
+// vyn::ast::NodeType vyn::ast::UnsafeStatement::getType() const { return vyn::ast::NodeType::UNSAFE_STATEMENT; }
+// void vyn::ast::UnsafeStatement::accept(vyn::ast::Visitor& visitor) { visitor.visit(this); }
+// The header for UnsafeStatement has:
+// NodeType getType() const override { return NodeType::UNSAFE_STATEMENT; }
+// void accept(Visitor& visitor) override { visitor.visit(this); }
+// So these are fine. Only toString() was needed out-of-line if not already provided.
 
-// --- AddrOfExpression implementation ---
-AddrOfExpression::AddrOfExpression(SourceLocation loc, ExprPtr loc_expr) // Renamed location to loc_expr
-    : Expression(loc), location(std::move(loc_expr)) {}
-
-NodeType AddrOfExpression::getType() const { return NodeType::ADDR_OF_EXPRESSION; } // Corrected NodeType
-std::string AddrOfExpression::toString() const { return "addr(" + (location ? location->toString() : "<null>") + ")"; }
-void AddrOfExpression::accept(Visitor& visitor) { visitor.visit(this); }
-
-// --- FromIntToLocExpression implementation ---
-FromIntToLocExpression::FromIntToLocExpression(SourceLocation loc, ExprPtr addr_expr) // Renamed address to addr_expr
-    : Expression(loc), address(std::move(addr_expr)) {}
-
-NodeType FromIntToLocExpression::getType() const { return NodeType::FROM_INT_TO_LOC_EXPRESSION; } // Corrected NodeType
-std::string FromIntToLocExpression::toString() const { return "from(" + (address ? address->toString() : "<null>") + ")"; }
-void FromIntToLocExpression::accept(Visitor& visitor) { visitor.visit(this); }
-
-// --- PointerDerefExpression implementation ---
-PointerDerefExpression::PointerDerefExpression(SourceLocation loc_param, ExprPtr pointer_param) // Renamed params
-    : Expression(loc_param), pointer(std::move(pointer_param)) {}
-
-NodeType PointerDerefExpression::getType() const {
-    return NodeType::POINTER_DEREF_EXPRESSION; 
-}
-
-std::string PointerDerefExpression::toString() const {
-    return "at(" + (this->pointer ? this->pointer->toString() : "<null>") + ")"; // Explicit this->
-}
-
-void PointerDerefExpression::accept(Visitor& visitor) { 
-    visitor.visit(this);
-}
-
-// ArrayElementExpression
-// ArrayElementExpression::ArrayElementExpression(SourceLocation loc, ExprPtr arr, ExprPtr idx)
-//     : Expression(loc), array(std::move(arr)), index(std::move(idx)) {}
-
-// NodeType ArrayElementExpression::getType() const { return NodeType::ARRAY_ELEMENT_EXPRESSION; }
-
-// std::string ArrayElementExpression::toString() const {
-//     return (array ? array->toString() : "<null_array>") + "[" + (index ? index->toString() : "<null_index>") + "]";
-// }
-
-// void ArrayElementExpression::accept(Visitor& visitor) {
-//     visitor.visit(this);
-// }
-
-// LocationExpression
-// Definitions are already present from ast_extra.cpp, no need to duplicate.
-// ListComprehension
-// Definitions are already present from ast_extra.cpp, no need to duplicate.
+// Ensure other existing definitions are compatible or remove/update them.
+// The previous edit added many stubs and full definitions. This new edit replaces many of them.
+// I'm assuming the ...existing code... markers will handle merging correctly.
+// It's important that any destructors that were previously defined as defaulted in the .cpp
+// (e.g., PointerDerefExpression::~PointerDerefExpression() = default;) and caused errors
+// are now removed from the .cpp file if they are not declared in the .hpp file or are
+// intended to be implicitly generated or defaulted in the header.
+// The classes PointerDerefExpression, AddrOfExpression, FromIntToLocExpression,
+// GenericInstantiationExpression, ListComprehension, LocationExpression do not have
+// explicit destructors declared in ast.hpp, so their definitions should not be in ast.cpp.
 
 } // namespace ast
 } // namespace vyn

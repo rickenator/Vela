@@ -63,6 +63,13 @@ std::string token_type_to_string(vyn::TokenType type) { // Corrected namespace f
         {vyn::TokenType::KEYWORD_AWAIT, "KEYWORD_AWAIT"},
         {vyn::TokenType::KEYWORD_ASYNC, "KEYWORD_ASYNC"},
         {vyn::TokenType::KEYWORD_OPERATOR, "KEYWORD_OPERATOR"},
+        {vyn::TokenType::KEYWORD_MY, "KEYWORD_MY"},
+        {vyn::TokenType::KEYWORD_OUR, "KEYWORD_OUR"},
+        {vyn::TokenType::KEYWORD_THEIR, "KEYWORD_THEIR"},
+        {vyn::TokenType::KEYWORD_PTR, "KEYWORD_PTR"},
+        {vyn::TokenType::KEYWORD_BORROW, "KEYWORD_BORROW"},
+        {vyn::TokenType::KEYWORD_VIEW, "KEYWORD_VIEW"},
+        {vyn::TokenType::KEYWORD_NIL, "KEYWORD_NIL"},
 
         // Operators
         {vyn::TokenType::PLUS, "PLUS"},
@@ -88,6 +95,20 @@ std::string token_type_to_string(vyn::TokenType type) { // Corrected namespace f
         {vyn::TokenType::RSHIFT, "RSHIFT"},
         {vyn::TokenType::DOTDOT, "DOTDOT"},
 
+        // Compound Assignment Operators
+        {vyn::TokenType::PLUSEQ, "PLUSEQ"},
+        {vyn::TokenType::MINUSEQ, "MINUSEQ"},
+        {vyn::TokenType::MULTIPLYEQ, "MULTIPLYEQ"},
+        {vyn::TokenType::DIVEQ, "DIVEQ"},
+        {vyn::TokenType::MODEQ, "MODEQ"},
+        {vyn::TokenType::LSHIFTEQ, "LSHIFTEQ"},
+        {vyn::TokenType::RSHIFTEQ, "RSHIFTEQ"},
+        {vyn::TokenType::BITWISEANDEQ, "BITWISEANDEQ"},
+        {vyn::TokenType::BITWISEOREQ, "BITWISEOREQ"},
+        {vyn::TokenType::BITWISEXOREQ, "BITWISEXOREQ"},
+        {vyn::TokenType::COLONEQ, "COLONEQ"},
+
+
         // Punctuation
         {vyn::TokenType::LPAREN, "LPAREN"},
         {vyn::TokenType::RPAREN, "RPAREN"},
@@ -104,6 +125,7 @@ std::string token_type_to_string(vyn::TokenType type) { // Corrected namespace f
         {vyn::TokenType::COLONCOLON, "COLONCOLON"},
         {vyn::TokenType::AT, "AT"},
         {vyn::TokenType::UNDERSCORE, "UNDERSCORE"},
+        {vyn::TokenType::QUESTION_MARK, "QUESTION_MARK"},
 
         // Misc
         {vyn::TokenType::UNKNOWN, "UNKNOWN"},
@@ -111,8 +133,10 @@ std::string token_type_to_string(vyn::TokenType type) { // Corrected namespace f
         {vyn::TokenType::COMMENT, "COMMENT"},
         {vyn::TokenType::NEWLINE, "NEWLINE"},
         {vyn::TokenType::INDENT, "INDENT"},
-        {vyn::TokenType::DEDENT, "DEDENT"}
+        {vyn::TokenType::DEDENT, "DEDENT"},
+        {vyn::TokenType::ILLEGAL, "ILLEGAL"} // Added for illegal/error tokens
     };
+
     auto it = token_map.find(type);
     return it != token_map.end() ? it->second : "UNKNOWN"; // Default to "UNKNOWN"
 }

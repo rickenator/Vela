@@ -1,11 +1,85 @@
 #pragma once
-#include "vyn/parser/ast.hpp"
+#include "vyn/parser/ast.hpp" // Ensure ast.hpp is included
 #include <string>
 #include <unordered_map>
 #include <vector>
 #include <memory>
 
 namespace vyn {
+
+class Driver; // Forward declaration
+
+namespace ast {
+class Node;
+class Module;
+class ExpressionStatement;
+class BlockStatement;
+class IfStatement;
+class ReturnStatement;
+class WhileStatement;
+class ForStatement;
+class BreakStatement;
+class ContinueStatement;
+class ImportStatement; // Should be ImportDeclaration
+class ExternStatement;
+class TryCatchStatement; // Should be TryStatement
+class ThrowStatement;
+class MatchStatement;
+class YieldStatement;
+class YieldReturnStatement;
+class AssertStatement;
+class EmptyStatement;
+class UnsafeStatement;
+
+// Missing forward declarations for expressions
+class Identifier;
+class IntegerLiteral;
+class UnaryExpression;
+class BinaryExpression;
+class CallExpression;
+class ArrayElementExpression;
+class MemberExpression;
+class AssignmentExpression;
+class LogicalExpression; // Add forward declaration
+class ConditionalExpression; // Add forward declaration
+class SequenceExpression; // Add forward declaration
+class ObjectLiteral;
+class ArrayLiteral;
+class FunctionExpression; // Add forward declaration
+class StringLiteral;
+class FloatLiteral;
+class BooleanLiteral;
+class NilLiteral;
+class ThisExpression; // Add forward declaration
+class SuperExpression; // Add forward declaration
+class AwaitExpression; // Add forward declaration
+class ListComprehension;
+class GenericInstantiationExpression;
+class PointerDerefExpression;
+class AddrOfExpression;
+class FromIntToLocExpression;
+class LocationExpression;
+
+// Missing forward declarations for declarations
+class VariableDeclaration;
+class FunctionDeclaration;
+class StructDeclaration;
+class EnumDeclaration;
+class TypeAliasDeclaration;
+class TraitDeclaration; // Add forward declaration
+class ImplDeclaration;
+class NamespaceDeclaration; // Add forward declaration
+
+// Missing forward declarations for types
+class TypeName; // Add forward declaration
+class PointerType; // Add forward declaration
+class ArrayType; // Add forward declaration
+class FunctionType; // Add forward declaration
+class OptionalType; // Add forward declaration
+class GenericParameter;
+
+class Visitor; // Forward declaration if it\'s in the ast namespace and defined elsewhere
+}
 
 struct BorrowInfo {
     std::string ownerName;
@@ -38,17 +112,85 @@ private:
     SymbolTable* parent;
 };
 
-class SemanticAnalyzer {
+class SemanticAnalyzer : public ast::Visitor {
 public:
-    SemanticAnalyzer();
+    explicit SemanticAnalyzer(Driver& driver);
     void analyze(ast::Module* root); // Qualified with ast::
     const std::vector<std::string>& getErrors() const { return errors; }
+
+    // Statements
+    void visit(ast::BlockStatement* node) override;
+    void visit(ast::ExpressionStatement* node) override;
+    void visit(ast::IfStatement* node) override;
+    void visit(ast::ForStatement* node) override;
+    void visit(ast::WhileStatement* node) override;
+    void visit(ast::ReturnStatement* node) override;
+    void visit(ast::BreakStatement* node) override;
+    void visit(ast::ContinueStatement* node) override;
+    void visit(ast::TryStatement* node) override; // Changed from TryCatchStatement
+    void visit(ast::UnsafeStatement* node) override;
+    void visit(ast::EmptyStatement* node) override;
+    void visit(ast::AssertStatement* node) override;
+    void visit(ast::MatchStatement* node) override;
+    void visit(ast::YieldStatement* node) override;
+    void visit(ast::YieldReturnStatement* node) override;
+
+    // Expressions
+    void visit(ast::Identifier* node) override;
+    void visit(ast::IntegerLiteral* node) override;
+    void visit(ast::UnaryExpression* node) override;
+    void visit(ast::BinaryExpression* node) override;
+    void visit(ast::CallExpression* node) override;
+    void visit(ast::ArrayElementExpression* node) override;
+    void visit(ast::MemberExpression* node) override;
+    void visit(ast::AssignmentExpression* node) override;
+    void visit(ast::LogicalExpression* node) override;
+    void visit(ast::ConditionalExpression* node) override; // Ternary
+    void visit(ast::SequenceExpression* node) override; // Comma operator
+    void visit(ast::ObjectLiteral* node) override;
+    void visit(ast::ArrayLiteral* node) override;
+    void visit(ast::FunctionExpression* node) override; // Lambda / anonymous function
+    void visit(ast::StringLiteral* node) override;
+    void visit(ast::FloatLiteral* node) override;
+    void visit(ast::BooleanLiteral* node) override;
+    void visit(ast::NilLiteral* node) override;
+    void visit(ast::ThisExpression* node) override;
+    void visit(ast::SuperExpression* node) override;
+    void visit(ast::AwaitExpression* node) override;
+    void visit(ast::ListComprehension* node) override;
+    void visit(ast::GenericInstantiationExpression* node) override;
+    void visit(ast::PointerDerefExpression* node) override;
+    void visit(ast::AddrOfExpression* node) override;
+    void visit(ast::FromIntToLocExpression* node) override;
+    void visit(ast::LocationExpression* node) override;
+
+    // Declarations
+    void visit(ast::VariableDeclaration* node) override;
+    void visit(ast::FunctionDeclaration* node) override;
+    void visit(ast::TypeAliasDeclaration* node) override;
+    void visit(ast::ImportDeclaration* node) override; // Changed from ImportStatement
+    void visit(ast::StructDeclaration* node) override;
+    void visit(ast::ClassDeclaration* node) override;
+    void visit(ast::EnumDeclaration* node) override;
+    void visit(ast::TraitDeclaration* node) override;
+    void visit(ast::ImplDeclaration* node) override;
+    void visit(ast::NamespaceDeclaration* node) override;
+
+    // Types (if visited)
+    void visit(ast::TypeName* node) override;
+    void visit(ast::PointerType* node) override;
+    void visit(ast::ArrayType* node) override;
+    void visit(ast::FunctionType* node) override;
+    void visit(ast::OptionalType* node) override;
+    void visit(ast::GenericParameter* node) override;
+
 private:
+    Driver& driver_; // Add this line
     void analyzeNode(ast::Node* node); // Qualified with ast::
     void analyzeAssignment(ast::AssignmentExpression* expr); // Qualified with ast::
     void analyzeVariableDeclaration(ast::VariableDeclaration* decl); // Qualified with ast::
     void analyzeUnaryExpression(ast::UnaryExpression* expr); // Qualified with ast::
-    void analyzeBorrowExpression(ast::BorrowExprNode* expr); // Qualified with ast::
+    void analyzeBorrowExpression(ast::BorrowExpression* expr); // Qualified with ast::
     void analyzeBlockStatement(ast::BlockStatement* block); // Qualified with ast::
     // Add other specific analyze methods if they exist and need qualification
     // void analyzeFunctionDeclaration(ast::FunctionDeclaration* decl);
@@ -74,6 +216,8 @@ private:
     void addError(const std::string& message, const ast::Node* node); // Use ast::Node for location
     bool isLValue(ast::Expression* expr);
     bool isRawLocationType(ast::Expression* expr); // Qualified with ast::
+
+    bool in_unsafe_block_ = false;
 };
 
 } // namespace vyn

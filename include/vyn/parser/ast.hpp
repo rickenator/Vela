@@ -5,43 +5,58 @@
 #include <vector>
 #include <memory>
 #include <variant>
-#include <optional> // Ensure this is present
-#include "token.hpp" // For Token
-#include "source_location.hpp" // For SourceLocation
+#include <optional>
+#include <iostream> // Added for std::cout
+#include "token.hpp"
+#include "source_location.hpp"
 
 namespace vyn {
 namespace ast {
 
-// Forward declarations
+// Forward declarations - ALL AST NODE TYPES must be declared here
 class Node;
 class Module;
-class Identifier;
 class Expression;
 class Statement;
 class Declaration;
 class Visitor;
-class NilLiteral;
-class StructDeclaration;
-class ClassDeclaration;
-class FieldDeclaration;
-class ImplDeclaration;
-class EnumDeclaration;
-class EnumVariant; // Renamed from EnumVariantNode
-class GenericParameter; // Renamed from GenericParamNode
-class TypeNode;
-class ArrayLiteral; // Renamed from ArrayLiteralNode
-class BorrowExpression; // Renamed from BorrowExprNode
-class TryStatement;
+
+// Literals
+class Identifier;
 class IntegerLiteral;
 class FloatLiteral;
 class StringLiteral;
 class BooleanLiteral;
+class ArrayLiteral;
 class ObjectLiteral;
+class NilLiteral;
+
+// Expressions
 class UnaryExpression;
 class BinaryExpression;
 class CallExpression;
 class MemberExpression;
 class AssignmentExpression;
+class BorrowExpression;
+class PointerDerefExpression;
+class AddrOfExpression;
+class FromIntToLocExpression;
+class ArrayElementExpression;
+class LocationExpression;
+class ListComprehension;
+class IfExpression;
+class ConstructionExpression;
+class ArrayInitializationExpression;
+class GenericInstantiationExpression;
+class LogicalExpression; // Added
+class ConditionalExpression; // Added
+class SequenceExpression; // Added
+class FunctionExpression; // Added
+class ThisExpression; // Added
+class SuperExpression; // Added
+class AwaitExpression; // Added
+
+// Statements
 class BlockStatement;
 class ExpressionStatement;
 class IfStatement;
@@ -50,71 +65,84 @@ class WhileStatement;
 class ReturnStatement;
 class BreakStatement;
 class ContinueStatement;
+class TryStatement;
+class UnsafeStatement;
+class EmptyStatement;
+class ExternStatement; // Added
+class ThrowStatement; // Added
+class MatchStatement; // Added
+class YieldStatement; // Added
+class YieldReturnStatement; // Added
+class AssertStatement; // Added
+
+// Declarations
 class VariableDeclaration;
 class FunctionDeclaration;
 class TypeAliasDeclaration;
 class ImportDeclaration;
-class TemplateDeclaration; // Renamed from TemplateDeclarationNode
-class PointerDerefExpression;
-class AddrOfExpression;
-class FromIntToLocExpression;
-class ArrayElementExpression; // Added forward declaration
-class LocationExpression; // Added forward declaration for LocationExpression
-class ListComprehension; // Added forward declaration for ListComprehension
-// New forward declarations
-class ConstructionExpression;
-class ArrayInitializationExpression;
+class StructDeclaration;
+class ClassDeclaration;
+class FieldDeclaration;
+class ImplDeclaration;
+class EnumDeclaration;
+class EnumVariant;
+class GenericParameter;
+class TemplateDeclaration;
+class TraitDeclaration; // Added
+class NamespaceDeclaration; // Added
 
-// --- Type aliases for smart pointers (must appear after all forward declarations) ---
+// Types (These are typically part of TypeNode or used as type specifiers,
+// but if they are distinct visitable AST nodes, they need to be here)
+class TypeNode;
+class TypeName; // Added
+class PointerType; // Added
+class ArrayType; // Added
+class FunctionType; // Added
+class OptionalType; // Added
+class TupleTypeNode; // ADDED FORWARD DECLARATION
+
+
+// --- Enums used by AST nodes ---
+enum class BorrowKind {
+    MUTABLE_BORROW,
+    IMMUTABLE_VIEW
+    // Add other kinds if necessary, e.g., UNIQUE_OWNERSHIP_TRANSFER
+};
+
+enum class OwnershipKind {
+    MY,    // Unique ownership
+    OUR,   // Shared ownership (e.g., reference counted)
+    THEIR, // Borrowed/Viewed (non-owning), further specified by BorrowKind if applicable
+    PTR    // Raw pointer (potentially non-owning, unsafe)
+    // Add other kinds as needed
+};
+
+
+// --- Type aliases for smart pointers ---
 using NodePtr = std::unique_ptr<Node>;
 using ExprPtr = std::unique_ptr<Expression>;
 using StmtPtr = std::unique_ptr<Statement>;
 using DeclPtr = std::unique_ptr<Declaration>;
 using TypeNodePtr = std::unique_ptr<TypeNode>;
 using IdentifierPtr = std::unique_ptr<Identifier>;
-using ArrayLiteralPtr = std::unique_ptr<ArrayLiteral>; // Renamed from ArrayLiteralNodePtr
-using BorrowExpressionPtr = std::unique_ptr<BorrowExpression>; // Renamed from BorrowExprNodePtr
+using ArrayLiteralPtr = std::unique_ptr<ArrayLiteral>;
+using BorrowExpressionPtr = std::unique_ptr<BorrowExpression>;
 
-// --- Helper structs (must appear after all forward declarations) ---
+// --- Helper structs ---
+// ... (FunctionParameter, ImportSpecifier) ...
+// (These should be fine as long as they don't depend on AST node classes not yet declared)
 struct FunctionParameter {
     std::unique_ptr<Identifier> name;
-    TypeNodePtr typeNode; // Optional
-    // Add other relevant fields like isConst, isSpread, etc. if needed
-
+    TypeNodePtr typeNode; 
     FunctionParameter(std::unique_ptr<Identifier> n, TypeNodePtr tn = nullptr)
         : name(std::move(n)), typeNode(std::move(tn)) {}
 };
 
 struct ImportSpecifier {
     std::unique_ptr<Identifier> importedName;
-    std::unique_ptr<Identifier> localName; // Optional, for 'as'
-
+    std::unique_ptr<Identifier> localName;
     ImportSpecifier(std::unique_ptr<Identifier> imported, std::unique_ptr<Identifier> local = nullptr)
         : importedName(std::move(imported)), localName(std::move(local)) {}
-};
-
-// New Enum for Type Categories
-enum class TypeCategory {
-    IDENTIFIER,          // e.g., Int, String, MyStruct<T>
-    OWNERSHIP_WRAPPED,   // e.g., my<T>, our<T>, their<T>, ptr<T>
-    ARRAY,               // e.g., T[]
-    TUPLE,               // e.g., (T1, T2)
-    FUNCTION_SIGNATURE,  // e.g., fn(T1, T2) -> R
-    OPTIONAL             // e.g., T?
-};
-
-// New Enum for Ownership Kinds (as per RFC)
-enum class OwnershipKind {
-    MY,
-    OUR,
-    THEIR,
-    PTR
-};
-
-// New Enum for Borrow Kinds
-enum class BorrowKind {
-    MUTABLE_BORROW, // for 'borrow' keyword
-    IMMUTABLE_VIEW  // for 'view' keyword
 };
 
 // enum class NodeType must be defined before Visitor
@@ -125,9 +153,9 @@ enum class NodeType {
     FLOAT_LITERAL,
     STRING_LITERAL,
     BOOLEAN_LITERAL,
-    ARRAY_LITERAL, // Renamed from ARRAY_LITERAL_NODE
-    OBJECT_LITERAL, // Renamed from OBJECT_LITERAL_NODE
-    NIL_LITERAL, // New
+    ARRAY_LITERAL, 
+    OBJECT_LITERAL, 
+    NIL_LITERAL,
 
     // Expressions
     UNARY_EXPRESSION,
@@ -135,17 +163,25 @@ enum class NodeType {
     CALL_EXPRESSION,
     MEMBER_EXPRESSION,
     ASSIGNMENT_EXPRESSION,
-    BORROW_EXPRESSION, // Renamed from BORROW_EXPRESSION_NODE
-    POINTER_DEREF_EXPRESSION, // Added
-    ADDR_OF_EXPRESSION,       // Added
-    FROM_INT_TO_LOC_EXPRESSION, // Added
-    ARRAY_ELEMENT_EXPRESSION, // Added
-    LOCATION_EXPRESSION, // Added NodeType for LocationExpression
-    LIST_COMPREHENSION, // Added NodeType for ListComprehension
-
-    // New Expression NodeTypes
+    BORROW_EXPRESSION, 
+    POINTER_DEREF_EXPRESSION, 
+    ADDR_OF_EXPRESSION,       
+    FROM_INT_TO_LOC_EXPRESSION, 
+    ARRAY_ELEMENT_EXPRESSION, 
+    LOCATION_EXPRESSION, 
+    LIST_COMPREHENSION, 
+    IF_EXPRESSION, 
+    GENERIC_INSTANTIATION_EXPRESSION, 
     CONSTRUCTION_EXPRESSION,
     ARRAY_INITIALIZATION_EXPRESSION,
+    LOGICAL_EXPRESSION, // Added
+    CONDITIONAL_EXPRESSION, // Added
+    SEQUENCE_EXPRESSION, // Added
+    FUNCTION_EXPRESSION, // Added
+    THIS_EXPRESSION, // Added
+    SUPER_EXPRESSION, // Added
+    AWAIT_EXPRESSION, // Added
+
 
     // Statements
     BLOCK_STATEMENT,
@@ -157,7 +193,14 @@ enum class NodeType {
     BREAK_STATEMENT,
     CONTINUE_STATEMENT,
     TRY_STATEMENT,
-
+    UNSAFE_STATEMENT, 
+    EMPTY_STATEMENT, 
+    EXTERN_STATEMENT, // Added
+    THROW_STATEMENT, // Added
+    MATCH_STATEMENT, // Added
+    YIELD_STATEMENT, // Added
+    YIELD_RETURN_STATEMENT, // Added
+    ASSERT_STATEMENT, // Added
 
     // Declarations
     VARIABLE_DECLARATION,
@@ -171,13 +214,22 @@ enum class NodeType {
     ENUM_DECLARATION,
     ENUM_VARIANT,
     GENERIC_PARAMETER, 
-    TEMPLATE_DECLARATION, // NodeType already TEMPLATE_DECLARATION, matches new class name TemplateDeclaration
-
+    TEMPLATE_DECLARATION,
+    TRAIT_DECLARATION, // Added
+    NAMESPACE_DECLARATION, // Added
 
     // Other
     TYPE_NODE, 
     MODULE,
+    // Node types for TypeName, PointerType etc. if they are distinct visitable nodes
+    TYPE_NAME, // Added
+    POINTER_TYPE, // Added
+    ARRAY_TYPE, // Added
+    FUNCTION_TYPE, // Added
+    OPTIONAL_TYPE, // Added
+    TUPLE_TYPE // ADDED
 };
+
 
 // Visitor Interface
 class Visitor {
@@ -191,7 +243,7 @@ public:
     virtual void visit(StringLiteral* node) = 0;
     virtual void visit(BooleanLiteral* node) = 0;
     virtual void visit(ObjectLiteral* node) = 0;
-    virtual void visit(NilLiteral* node) = 0; // New
+    virtual void visit(NilLiteral* node) = 0;
 
     // Expressions
     virtual void visit(UnaryExpression* node) = 0;
@@ -199,18 +251,25 @@ public:
     virtual void visit(CallExpression* node) = 0;
     virtual void visit(MemberExpression* node) = 0;
     virtual void visit(AssignmentExpression* node) = 0;
-    virtual void visit(ArrayLiteral* node) = 0; // Renamed from ArrayLiteralNode
-    virtual void visit(BorrowExpression* node) = 0; // Renamed from BorrowExprNode
+    virtual void visit(ArrayLiteral* node) = 0;
+    virtual void visit(BorrowExpression* node) = 0;
     virtual void visit(PointerDerefExpression* node) = 0;
     virtual void visit(AddrOfExpression* node) = 0;
     virtual void visit(FromIntToLocExpression* node) = 0;
-    virtual void visit(ArrayElementExpression* node) = 0; // Added
-    virtual void visit(LocationExpression* node) = 0; // Added visit method for LocationExpression
-    virtual void visit(ListComprehension* node) = 0; // Added visit method for ListComprehension
-
-    // New visit methods for construction and array initialization
+    virtual void visit(ArrayElementExpression* node) = 0;
+    virtual void visit(LocationExpression* node) = 0;
+    virtual void visit(ListComprehension* node) = 0;
+    virtual void visit(IfExpression* node) = 0;
     virtual void visit(ConstructionExpression* node) = 0;
     virtual void visit(ArrayInitializationExpression* node) = 0;
+    virtual void visit(GenericInstantiationExpression* node) = 0;
+    virtual void visit(LogicalExpression* node) = 0;
+    virtual void visit(ConditionalExpression* node) = 0;
+    virtual void visit(SequenceExpression* node) = 0;
+    virtual void visit(FunctionExpression* node) = 0;
+    virtual void visit(ThisExpression* node) = 0;
+    virtual void visit(SuperExpression* node) = 0;
+    virtual void visit(AwaitExpression* node) = 0;
 
     // Statements
     virtual void visit(BlockStatement* node) = 0;
@@ -221,13 +280,21 @@ public:
     virtual void visit(ReturnStatement* node) = 0;
     virtual void visit(BreakStatement* node) = 0;
     virtual void visit(ContinueStatement* node) = 0;
-    virtual void visit(TryStatement* node) = 0;
+    virtual void visit(TryStatement* node) = 0; 
+    virtual void visit(UnsafeStatement* node) = 0;
+    virtual void visit(EmptyStatement* node) = 0;
+    virtual void visit(ExternStatement* node) = 0;
+    virtual void visit(ThrowStatement* node) = 0;
+    virtual void visit(MatchStatement* node) = 0;
+    virtual void visit(YieldStatement* node) = 0;
+    virtual void visit(YieldReturnStatement* node) = 0;
+    virtual void visit(AssertStatement* node) = 0;
 
     // Declarations
     virtual void visit(VariableDeclaration* node) = 0;
     virtual void visit(FunctionDeclaration* node) = 0;
     virtual void visit(TypeAliasDeclaration* node) = 0;
-    virtual void visit(ImportDeclaration* node) = 0;
+    virtual void visit(ImportDeclaration* node) = 0; 
     virtual void visit(StructDeclaration* node) = 0;
     virtual void visit(ClassDeclaration* node) = 0;
     virtual void visit(FieldDeclaration* node) = 0;
@@ -235,18 +302,28 @@ public:
     virtual void visit(EnumDeclaration* node) = 0;
     virtual void visit(EnumVariant* node) = 0;
     virtual void visit(GenericParameter* node) = 0;
-    virtual void visit(TemplateDeclaration* node) = 0; // Renamed from TemplateDeclarationNode
+    virtual void visit(TemplateDeclaration* node) = 0;
+    virtual void visit(TraitDeclaration* node) = 0;
+    virtual void visit(NamespaceDeclaration* node) = 0;
     
     // Other
     virtual void visit(TypeNode* node) = 0; 
     virtual void visit(Module* node) = 0;
+
+    // Types (if they are distinct visitable nodes)
+    virtual void visit(TypeName* node) = 0;
+    virtual void visit(PointerType* node) = 0;
+    virtual void visit(ArrayType* node) = 0;
+    virtual void visit(FunctionType* node) = 0;
+    virtual void visit(OptionalType* node) = 0;
+    virtual void visit(TupleTypeNode* node) = 0; // ADDED visit method for TupleTypeNode
 };
 
 // Base AST Node
 class Node {
 public:
     SourceLocation loc; 
-    std::string inferredTypeName; // Added for type checking/codegen hints
+    std::string inferredTypeName; 
 
     Node(SourceLocation loc) : loc(loc) {}
     virtual ~Node() = default;
@@ -274,196 +351,8 @@ public:
 };
     
 
-// --- Declarations ---
-// (Ensure FunctionParameter and ImportSpecifier are defined above this section)
-
-class VariableDeclaration : public Declaration {
-public:
-    std::unique_ptr<Identifier> id;
-    bool isConst; // Binding const-ness (const x: T vs var x: T)
-    TypeNodePtr typeNode; // Optional, type of the variable (replaces typeAnnotation)
-    ExprPtr init;         // Optional
-
-    VariableDeclaration(SourceLocation loc, std::unique_ptr<Identifier> id, bool isConst, TypeNodePtr typeNode = nullptr, ExprPtr init = nullptr);
-    virtual ~VariableDeclaration();
-    NodeType getType() const override;
-    std::string toString() const override;
-    void accept(Visitor& visitor) override;
-};
-
-class TypeAliasDeclaration : public Declaration {
-public:
-    std::unique_ptr<Identifier> name;
-    TypeNodePtr typeNode; // The actual type being aliased
-
-    TypeAliasDeclaration(SourceLocation loc, std::unique_ptr<Identifier> name, TypeNodePtr typeNode);
-    virtual ~TypeAliasDeclaration();
-    NodeType getType() const override;
-    std::string toString() const override;
-    void accept(Visitor& visitor) override;
-};
-
-class FunctionDeclaration : public Declaration {
-public:
-    std::unique_ptr<Identifier> id;
-    std::vector<FunctionParameter> params; // Uses FunctionParameter
-    std::unique_ptr<class BlockStatement> body; // Forward declare BlockStatement if full def is later
-    bool isAsync;
-    TypeNodePtr returnTypeNode; // Optional
-
-    FunctionDeclaration(SourceLocation loc, std::unique_ptr<Identifier> id, std::vector<FunctionParameter> params, std::unique_ptr<BlockStatement> body, bool isAsync = false, TypeNodePtr returnTypeNode = nullptr);
-    virtual ~FunctionDeclaration();
-    NodeType getType() const override;
-    std::string toString() const override;
-    void accept(Visitor& visitor) override;
-};
-
-class ImportDeclaration : public Declaration {
-public:
-    std::unique_ptr<StringLiteral> source;
-    std::vector<ImportSpecifier> specifiers; // Uses ImportSpecifier
-    std::unique_ptr<Identifier> defaultImport; // Optional
-    std::unique_ptr<Identifier> namespaceImport; // Optional, for import * as ns
-
-    ImportDeclaration(SourceLocation loc, std::unique_ptr<StringLiteral> source, std::vector<ImportSpecifier> specifiers = {}, std::unique_ptr<Identifier> defaultImport = nullptr, std::unique_ptr<Identifier> namespaceImport = nullptr);
-    NodeType getType() const override;
-    std::string toString() const override;
-    void accept(Visitor& visitor) override;
-};
-
-class StructDeclaration : public Declaration {
-public:
-    std::unique_ptr<Identifier> name;
-    std::vector<std::unique_ptr<GenericParameter>> genericParams; // Renamed from GenericParamNode
-    std::vector<std::unique_ptr<FieldDeclaration>> fields;
-
-    StructDeclaration(SourceLocation loc, std::unique_ptr<Identifier> name, std::vector<std::unique_ptr<GenericParameter>> genericParams, std::vector<std::unique_ptr<FieldDeclaration>> fields);
-    NodeType getType() const override;
-    std::string toString() const override;
-    void accept(Visitor& visitor) override;
-};
-
-class ClassDeclaration : public Declaration {
-public:
-    std::unique_ptr<Identifier> name;
-    std::vector<std::unique_ptr<GenericParameter>> genericParams; // Renamed from GenericParamNode
-    std::vector<DeclPtr> members; // Can be FieldDeclaration or FunctionDeclaration
-
-    ClassDeclaration(SourceLocation loc, std::unique_ptr<Identifier> name, std::vector<std::unique_ptr<GenericParameter>> genericParams, std::vector<DeclPtr> members);
-    NodeType getType() const override;
-    std::string toString() const override;
-    void accept(Visitor& visitor) override;
-};
-
-class FieldDeclaration : public Declaration { // Or Node, if fields are not standalone statements
-public:
-    std::unique_ptr<Identifier> name;
-    TypeNodePtr typeNode;
-    ExprPtr initializer; // Optional
-    bool isMutable;
-
-    FieldDeclaration(SourceLocation loc, std::unique_ptr<Identifier> name, TypeNodePtr typeNode, ExprPtr initializer = nullptr, bool isMutable = true);
-    NodeType getType() const override;
-    std::string toString() const override;
-    void accept(Visitor& visitor) override;
-};
-
-class ImplDeclaration : public Declaration {
-public:
-    std::unique_ptr<Identifier> name; // Name of the impl block (optional)
-    std::vector<std::unique_ptr<GenericParameter>> genericParams; // Renamed from GenericParamNode
-    TypeNodePtr selfType; // The type being implemented (e.g., MyStruct<T>)
-    TypeNodePtr traitType; // Optional: the trait being implemented (e.g., MyTrait<U>)
-    std::vector<std::unique_ptr<FunctionDeclaration>> methods;
-
-    ImplDeclaration(SourceLocation loc, TypeNodePtr selfType, std::vector<std::unique_ptr<FunctionDeclaration>> methods, std::unique_ptr<Identifier> name = nullptr, std::vector<std::unique_ptr<GenericParameter>> genericParams = {}, TypeNodePtr traitType = nullptr);
-    NodeType getType() const override;
-    std::string toString() const override;
-    void accept(Visitor& visitor) override;
-};
-
-class EnumVariant : public Node { // Renamed from EnumVariantNode
-public:
-    std::unique_ptr<Identifier> name;
-    std::vector<TypeNodePtr> associatedTypes; // e.g. Some(String, Int)
-
-    EnumVariant(SourceLocation loc, std::unique_ptr<Identifier> name, std::vector<TypeNodePtr> associatedTypes = {}); // Renamed from EnumVariantNode
-    NodeType getType() const override;
-    std::string toString() const override;
-    void accept(Visitor& visitor) override;
-};
-
-class EnumDeclaration : public Declaration {
-public:
-    std::unique_ptr<Identifier> name;
-    std::vector<std::unique_ptr<GenericParameter>> genericParams; // Renamed from GenericParamNode
-    std::vector<std::unique_ptr<EnumVariant>> variants;
-
-    EnumDeclaration(SourceLocation loc, std::unique_ptr<Identifier> name, std::vector<std::unique_ptr<GenericParameter>> genericParams, std::vector<std::unique_ptr<EnumVariant>> variants); // Renamed from GenericParamNode
-    NodeType getType() const override;
-    std::string toString() const override;
-    void accept(Visitor& visitor) override;
-};
-
-// --- New TypeNode Definition ---
-class TypeNode : public Node {
-public:
-    // Type categories
-    enum class Category { // Renamed from TypeCategory
-        IDENTIFIER,
-        TUPLE,
-        ARRAY,
-        FUNCTION_SIGNATURE,
-        OWNERSHIP_WRAPPED // For my<T>, their<T>, etc.
-    };
-
-    Category category; // Use the renamed enum
-    SourceLocation loc;
-
-    // For IDENTIFIER
-    IdentifierPtr name; // Changed from std::unique_ptr<Identifier> to IdentifierPtr
-    std::vector<TypeNodePtr> genericArguments;
-
-    // For TUPLE
-    std::vector<TypeNodePtr> tupleElementTypes; // Added for tuple types
-
-    // For OWNERSHIP_WRAPPED
-    OwnershipKind ownership; // my, our, their, ptr
-    TypeNodePtr wrappedType; // The T in my<T>
-
-    // For ARRAY
-    TypeNodePtr arrayElementType;
-    ExprPtr arraySizeExpression; // Added for [Type; Size]
-
-    // For FUNCTION_SIGNATURE
-    std::vector<TypeNodePtr> functionParameters;
-    TypeNodePtr functionReturnType; // Added for function return type
-
-    // Common properties
-    bool dataIsConst = false; // True if the data pointed to/held is const (e.g. Foo const, or [Int const])
-    bool isOptional = false;  // True if the type is optional (e.g. Foo?)
-    bool isPointer = false; // True if the type is a raw pointer (e.g. Foo*)
-
-public: // Changed from private to public
-    // Private constructor to enforce use of static factory methods.
-    // Implementations will be in ast.cpp
-    TypeNode(SourceLocation loc, Category category, bool dataIsConst, bool isOptional); // Update constructor
-
-public:
-    ~TypeNode() override = default;
-
-    // Static factory methods (declarations)
-    static TypeNodePtr newIdentifier(SourceLocation loc, IdentifierPtr name, std::vector<TypeNodePtr> genericArgs = {}, bool dataIsConst = false, bool isOptional = false);
-    static TypeNodePtr newTuple(SourceLocation loc, std::vector<TypeNodePtr> memberTypes, bool dataIsConst = false, bool isOptional = false);
-    static TypeNodePtr newArray(SourceLocation loc, TypeNodePtr elementType, ExprPtr sizeExpression, bool dataIsConst = false, bool isOptional = false);
-    static TypeNodePtr newFunctionSignature(SourceLocation loc, std::vector<TypeNodePtr> params, TypeNodePtr returnType, bool dataIsConst = false, bool isOptional = false);
-    static TypeNodePtr newOwnershipWrapped(SourceLocation loc, OwnershipKind ownership, TypeNodePtr wrappedType, bool dataIsConst = false, bool isOptional = false);
-
-    std::string toString() const override;
-    NodeType getType() const override { return NodeType::TYPE_NODE; } // Corrected to TYPE_NODE
-    void accept(Visitor& visitor) override;
-};
-
+// --- START OF AST NODE CLASS DEFINITIONS ---
+// (Ensure all classes forward-declared above are defined here or in included files)
 
 // --- Literals ---
 class Identifier : public Expression {
@@ -532,7 +421,7 @@ public:
 class BorrowExpression : public Expression { // Renamed from BorrowExprNode
 public:
     ExprPtr expression; 
-    BorrowKind kind;
+    BorrowKind kind; // Uses the globally defined BorrowKind
 
     BorrowExpression(SourceLocation loc, ExprPtr expression, BorrowKind kind); // Renamed from BorrowExprNode
     NodeType getType() const override { return NodeType::BORROW_EXPRESSION; } // Updated NodeType
@@ -719,6 +608,18 @@ public:
     void accept(Visitor& visitor) override;
 };
 
+class GenericInstantiationExpression : public Expression {
+public:
+    ExprPtr baseExpression; // The expression being genericized (e.g., 'myFunc', 'MyType')
+    std::vector<TypeNodePtr> genericArguments;
+    SourceLocation lt_loc; // Location of '<'
+    SourceLocation gt_loc; // Location of '>'
+
+    GenericInstantiationExpression(SourceLocation loc, ExprPtr base, std::vector<TypeNodePtr> args, SourceLocation lt_loc, SourceLocation gt_loc);
+    NodeType getType() const override;
+    std::string toString() const override;
+    void accept(Visitor& visitor) override;
+};
 
 class MemberExpression : public Expression {
 public:
@@ -754,6 +655,17 @@ public:
 
     BlockStatement(SourceLocation loc, std::vector<StmtPtr> body);
     virtual ~BlockStatement();
+    NodeType getType() const override;
+    std::string toString() const override;
+    void accept(Visitor& visitor) override;
+};
+
+// New EmptyStatement AST node
+class EmptyStatement : public Statement {
+public:
+    EmptyStatement(SourceLocation loc);
+    ~EmptyStatement() override = default;
+
     NodeType getType() const override;
     std::string toString() const override;
     void accept(Visitor& visitor) override;
@@ -902,6 +814,313 @@ public:
     std::string toString() const override;
     void accept(Visitor& visitor) override;
 };
+
+// --- New IfExpression Definition ---
+class IfExpression : public Expression {
+public:
+    ExprPtr condition;
+    ExprPtr thenBranch;
+    ExprPtr elseBranch; // Vyn requires else for if-expressions
+
+    IfExpression(SourceLocation loc, ExprPtr condition, ExprPtr thenBranch, ExprPtr elseBranch);
+    ~IfExpression() override = default; // Or implement if needed
+
+    NodeType getType() const override;
+    std::string toString() const override;
+    void accept(Visitor& visitor) override;
+};
+
+// New UnsafeStatement AST node
+class UnsafeStatement : public Statement {
+public:
+    std::unique_ptr<BlockStatement> block; // The unsafe block
+
+    UnsafeStatement(SourceLocation loc, std::unique_ptr<BlockStatement> blockStmt)
+        : Statement(loc), block(std::move(blockStmt)) {}
+
+    NodeType getType() const override { return NodeType::UNSAFE_STATEMENT; }
+    void accept(Visitor& visitor) override { visitor.visit(this); }
+
+    std::string toString() const override; // Declaration of toString
+};
+
+class TypeNode : public Node {
+public:
+    // Define TypeCategory as a nested enum
+    enum class Category {
+        IDENTIFIER,     // e.g., int, MyStruct
+        POINTER,        // e.g., *T, *const T
+        ARRAY,          // e.g., [T; N], [T]
+        FUNCTION,       // e.g., fn(T1, T2) -> R
+        TUPLE,          // e.g., (T1, T2)
+        OPTIONAL,       // e.g., ?T
+        REFERENCE,      // e.g., &T, &mut T
+        SLICE,          // e.g., &[T]
+        UNKNOWN         // Placeholder or error
+    };
+
+    TypeNode(SourceLocation loc) : Node(loc) {}
+    virtual ~TypeNode() = default;
+
+    // For debugging: print the category of the type node
+    void printCategory() const {
+        // This function is just for debugging purposes and can be removed if not needed
+        switch (getCategory()) {
+            case Category::IDENTIFIER:     std::cout << "TypeNode Category: IDENTIFIER\n"; break;
+            case Category::POINTER:        std::cout << "TypeNode Category: POINTER\n"; break;
+            case Category::ARRAY:          std::cout << "TypeNode Category: ARRAY\n"; break;
+            case Category::FUNCTION:       std::cout << "TypeNode Category: FUNCTION\n"; break;
+            case Category::TUPLE:          std::cout << "TypeNode Category: TUPLE\n"; break;
+            case Category::OPTIONAL:       std::cout << "TypeNode Category: OPTIONAL\n"; break;
+            case Category::REFERENCE:      std::cout << "TypeNode Category: REFERENCE\n"; break;
+            case Category::SLICE:          std::cout << "TypeNode Category: SLICE\n"; break;
+            case Category::UNKNOWN:        std::cout << "TypeNode Category: UNKNOWN\n"; break;
+        }
+    }
+
+    virtual Category getCategory() const = 0; // Pure virtual function for getting the category
+    // NodeType getType() const override { return NodeType::TYPE_NODE; } // Each derived type should specify
+};
+
+// --- Full Class Definition for TypeName ---
+class TypeName : public TypeNode {
+public:
+    std::unique_ptr<Identifier> identifier;
+    std::vector<TypeNodePtr> genericArgs; // For generics like Vec<T>
+
+    TypeName(SourceLocation loc, std::unique_ptr<Identifier> id, std::vector<TypeNodePtr> args = {});
+    NodeType getType() const override;
+    std::string toString() const override;
+    void accept(Visitor& visitor) override;
+
+    Category getCategory() const override { return Category::IDENTIFIER; } // TypeName is an identifier type
+};
+// --- End of TypeName Definition ---
+
+// --- Full Class Definition for PointerType ---
+class PointerType : public TypeNode {
+public:
+    TypeNodePtr pointeeType; // The type being pointed to
+
+    PointerType(SourceLocation loc, TypeNodePtr pointee);
+    NodeType getType() const override;
+    std::string toString() const override;
+    void accept(Visitor& visitor) override;
+
+    Category getCategory() const override { return Category::POINTER; }
+};
+// --- End of PointerType Definition ---
+
+// --- Full Class Definition for ArrayType ---
+class ArrayType : public TypeNode {
+public:
+    TypeNodePtr elementType; // The type of the array elements
+    ExprPtr sizeExpression;  // The size of the array, if known
+
+    ArrayType(SourceLocation loc, TypeNodePtr elementType, ExprPtr sizeExpression = nullptr);
+    NodeType getType() const override;
+    std::string toString() const override;
+    void accept(Visitor& visitor) override;
+
+    Category getCategory() const override { return Category::ARRAY; }
+};
+// --- End of ArrayType Definition ---
+
+// --- Full Class Definition for FunctionType ---
+class FunctionType : public TypeNode {
+public:
+    std::vector<TypeNodePtr> parameterTypes; // The types of the function parameters
+    TypeNodePtr returnType;                 // The return type of the function
+
+    FunctionType(SourceLocation loc, std::vector<TypeNodePtr> params, TypeNodePtr returnType);
+    NodeType getType() const override;
+    std::string toString() const override;
+    void accept(Visitor& visitor) override;
+
+    Category getCategory() const override { return Category::FUNCTION; }
+};
+// --- End of FunctionType Definition ---
+
+// --- Full Class Definition for OptionalType ---
+class OptionalType : public TypeNode {
+public:
+    TypeNodePtr containedType; // The type contained within the optional
+
+    OptionalType(SourceLocation loc, TypeNodePtr containedType);
+    NodeType getType() const override;
+    std::string toString() const override;
+    void accept(Visitor& visitor) override;
+
+    Category getCategory() const override { return Category::OPTIONAL; }
+};
+// --- End of OptionalType Definition ---
+
+// --- Full Class Definition for TupleTypeNode --- // ADDED
+class TupleTypeNode : public TypeNode {
+public:
+    std::vector<TypeNodePtr> memberTypes;
+
+    TupleTypeNode(SourceLocation loc, std::vector<TypeNodePtr> members);
+    NodeType getType() const override;
+    std::string toString() const override;
+    void accept(Visitor& visitor) override;
+    Category getCategory() const override { return Category::TUPLE; }
+};
+// --- End of TupleTypeNode Definition --- // ADDED
+
+
+// --- Declarations (ensure full definitions are here) ---
+
+// ImportDeclaration (Example, ensure others follow suit if not already complete)
+class ImportDeclaration : public Declaration {
+public:
+    std::unique_ptr<StringLiteral> source; // e.g., "module_name" or "./file.vyn"
+    std::vector<ImportSpecifier> specifiers; // For named imports: { A, B as C }
+    std::unique_ptr<Identifier> defaultImport; // For default import: import X from ...
+    std::unique_ptr<Identifier> namespaceImport; // For namespace import: import * as M from ...
+
+    ImportDeclaration(SourceLocation loc,
+                      std::unique_ptr<StringLiteral> source,
+                      std::vector<ImportSpecifier> specifiers = {},
+                      std::unique_ptr<Identifier> defaultImport = nullptr,
+                      std::unique_ptr<Identifier> namespaceImport = nullptr);
+    ~ImportDeclaration() override = default;
+    NodeType getType() const override;
+    std::string toString() const override;
+    void accept(Visitor& visitor) override;
+};
+
+// VariableDeclaration
+class VariableDeclaration : public Declaration {
+public:
+    std::unique_ptr<Identifier> id;
+    bool isConst; // true for 'let', false for 'var'
+    TypeNodePtr typeNode; // Optional type annotation
+    ExprPtr init;         // Optional initializer
+
+    VariableDeclaration(SourceLocation loc, std::unique_ptr<Identifier> id, bool isConst, TypeNodePtr typeNode = nullptr, ExprPtr init = nullptr);
+    ~VariableDeclaration() override = default;
+    NodeType getType() const override;
+    std::string toString() const override;
+    void accept(Visitor& visitor) override;
+};
+
+// FunctionDeclaration
+class FunctionDeclaration : public Declaration {
+public:
+    std::unique_ptr<Identifier> id;
+    std::vector<FunctionParameter> params;
+    std::unique_ptr<BlockStatement> body;
+    bool isAsync;
+    TypeNodePtr returnTypeNode; // Optional return type annotation
+
+    FunctionDeclaration(SourceLocation loc, std::unique_ptr<Identifier> id, std::vector<FunctionParameter> params, std::unique_ptr<BlockStatement> body, bool isAsync = false, TypeNodePtr returnTypeNode = nullptr);
+    ~FunctionDeclaration() override = default;
+    NodeType getType() const override;
+    std::string toString() const override;
+    void accept(Visitor& visitor) override;
+};
+
+// TypeAliasDeclaration
+class TypeAliasDeclaration : public Declaration {
+public:
+    std::unique_ptr<Identifier> name;
+    TypeNodePtr typeNode; // The type being aliased
+
+    TypeAliasDeclaration(SourceLocation loc, std::unique_ptr<Identifier> name, TypeNodePtr typeNode);
+    ~TypeAliasDeclaration() override = default;
+    NodeType getType() const override;
+    std::string toString() const override;
+    void accept(Visitor& visitor) override;
+};
+
+// FieldDeclaration (typically part of Struct/Class)
+class FieldDeclaration : public Declaration { // Or Node if not a standalone statement
+public:
+    std::unique_ptr<Identifier> name;
+    TypeNodePtr typeNode;
+    ExprPtr initializer; // Optional default value
+    bool isMutable; // Or some other way to denote mutability/visibility
+
+    FieldDeclaration(SourceLocation loc, std::unique_ptr<Identifier> name, TypeNodePtr typeNode, ExprPtr initializer = nullptr, bool isMutable = false);
+    ~FieldDeclaration() override = default;
+    NodeType getType() const override;
+    std::string toString() const override;
+    void accept(Visitor& visitor) override;
+};
+
+// StructDeclaration
+class StructDeclaration : public Declaration {
+public:
+    std::unique_ptr<Identifier> name;
+    std::vector<std::unique_ptr<GenericParameter>> genericParams;
+    std::vector<std::unique_ptr<FieldDeclaration>> fields;
+
+    StructDeclaration(SourceLocation loc, std::unique_ptr<Identifier> name, std::vector<std::unique_ptr<GenericParameter>> genericParams, std::vector<std::unique_ptr<FieldDeclaration>> fields);
+    ~StructDeclaration() override = default;
+    NodeType getType() const override;
+    std::string toString() const override;
+    void accept(Visitor& visitor) override;
+};
+
+// ClassDeclaration
+class ClassDeclaration : public Declaration {
+public:
+    std::unique_ptr<Identifier> name;
+    std::vector<std::unique_ptr<GenericParameter>> genericParams;
+    // Members can be FieldDeclarations or FunctionDeclarations (methods)
+    std::vector<DeclPtr> members; // Using DeclPtr to hold various member types
+
+    ClassDeclaration(SourceLocation loc, std::unique_ptr<Identifier> name, std::vector<std::unique_ptr<GenericParameter>> genericParams, std::vector<DeclPtr> members);
+    ~ClassDeclaration() override = default;
+    NodeType getType() const override;
+    std::string toString() const override;
+    void accept(Visitor& visitor) override;
+};
+
+// ImplDeclaration
+class ImplDeclaration : public Declaration {
+public:
+    std::unique_ptr<Identifier> name; // Optional name for the impl block (less common)
+    std::vector<std::unique_ptr<GenericParameter>> genericParams;
+    TypeNodePtr traitType; // Optional: if implementing a trait (e.g., impl MyTrait for MyType)
+    TypeNodePtr selfType;  // The type for which methods are being implemented (e.g., MyType)
+    std::vector<std::unique_ptr<FunctionDeclaration>> methods;
+
+    ImplDeclaration(SourceLocation loc, TypeNodePtr selfType, std::vector<std::unique_ptr<FunctionDeclaration>> methods, std::unique_ptr<Identifier> name = nullptr, std::vector<std::unique_ptr<GenericParameter>> genericParams = {}, TypeNodePtr traitType = nullptr);
+    ~ImplDeclaration() override = default;
+    NodeType getType() const override;
+    std::string toString() const override;
+    void accept(Visitor& visitor) override;
+};
+
+// EnumVariant (typically part of EnumDeclaration)
+class EnumVariant : public Node { // Not a Declaration itself, but a component
+public:
+    std::unique_ptr<Identifier> name;
+    std::vector<TypeNodePtr> associatedTypes; // e.g., Option::Some(T) -> T is an associated type
+
+    EnumVariant(SourceLocation loc, std::unique_ptr<Identifier> name, std::vector<TypeNodePtr> associatedTypes = {});
+    ~EnumVariant() override = default;
+    NodeType getType() const override;
+    std::string toString() const override;
+    void accept(Visitor& visitor) override;
+};
+
+// EnumDeclaration
+class EnumDeclaration : public Declaration {
+public:
+    std::unique_ptr<Identifier> name;
+    std::vector<std::unique_ptr<GenericParameter>> genericParams;
+    std::vector<std::unique_ptr<EnumVariant>> variants;
+
+    EnumDeclaration(SourceLocation loc, std::unique_ptr<Identifier> name, std::vector<std::unique_ptr<GenericParameter>> genericParams, std::vector<std::unique_ptr<EnumVariant>> variants);
+    ~EnumDeclaration() override = default;
+    NodeType getType() const override;
+    std::string toString() const override;
+    void accept(Visitor& visitor) override;
+};
+
 
 } // namespace ast
 } // namespace vyn

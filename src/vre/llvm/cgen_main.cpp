@@ -37,6 +37,11 @@ void LLVMCodegen::logError(const SourceLocation& loc, const std::string& message
     std::cerr << "Error at " << (!loc.filePath.empty() ? loc.filePath.c_str() : "unknown_file") << ":" << loc.line << ":" << loc.column << ": " << message << std::endl;
 }
 
+// Warning Logging Utility
+void LLVMCodegen::logWarning(const SourceLocation& loc, const std::string& message) {
+    std::cerr << "Warning at " << (!loc.filePath.empty() ? loc.filePath.c_str() : "unknown_file") << ":" << loc.line << ":" << loc.column << ": " << message << std::endl;
+}
+
 // --- RTTI Helper Implementations ---
 llvm::StructType* LLVMCodegen::getOrCreateRTTIStructType() {
     if (rttiStructType) return rttiStructType;
@@ -59,8 +64,9 @@ llvm::Value* LLVMCodegen::generateRTTIObject(const std::string& typeName, int ty
     return llvm::ConstantStruct::get(rttiTy, rttiVals);
 }
 
-LLVMCodegen::LLVMCodegen()
-    : context(std::make_unique<llvm::LLVMContext>()),
+LLVMCodegen::LLVMCodegen(Driver& driver)
+    : driver_(driver),
+      context(std::make_unique<llvm::LLVMContext>()),
       module(std::make_unique<llvm::Module>("VynModule", *this->context)), 
       builder(std::make_unique<llvm::IRBuilder<>>(*this->context)),
       m_isLHSOfAssignment(false),

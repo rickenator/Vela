@@ -7,6 +7,7 @@
 #include "vyn/parser/token.hpp"  // Corrected path
 #include "vyn/semantic.hpp" // Added to make SemanticAnalyzer available
 #include "vyn/vre/llvm/codegen.hpp" // Added for LLVMCodegen
+#include "vyn/driver.hpp" // Added for vyn::Driver
 
 /* // EBNF Grammar of the Vyn Language  // Uncommented
 //

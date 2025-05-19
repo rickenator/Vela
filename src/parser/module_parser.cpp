@@ -27,7 +27,8 @@ std::unique_ptr<vyn::ast::Module> ModuleParser::parse() {
             // We need to construct a StatementParser for this
             StatementParser stmt_parser(this->tokens_, this->pos_, /*indent_level=*/0, this->current_file_path_,
                                        this->declaration_parser_.get_type_parser(),
-                                       this->declaration_parser_.get_expr_parser());
+                                       this->declaration_parser_.get_expr_parser(),
+                                       &this->declaration_parser_);
             auto stmt_node = stmt_parser.parse();
             this->pos_ = stmt_parser.get_current_pos();
             if (stmt_node) {

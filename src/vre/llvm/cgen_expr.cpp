@@ -106,7 +106,7 @@ void LLVMCodegen::visit(vyn::ast::ObjectLiteral* node) {
     // m_currentLLVMValue = alloca; // or the loaded value if appropriate
 }
 
-void LLVMCodegen::visit(vyn::ast::ArrayLiteralNode* node) {
+void LLVMCodegen::visit(vyn::ast::ArrayLiteral* node) {
     if (node->elements.empty()) {
         logError(node->loc, "Array literal has no elements, cannot determine type or create instance yet.");
         // Potentially create an empty array of a default type or based on context if available.
@@ -733,7 +733,7 @@ void LLVMCodegen::visit(vyn::ast::AssignmentExpression* node) {
     m_currentLLVMValue = rhsValue; // The value of an assignment expression is the assigned value
 }
 
-void LLVMCodegen::visit(vyn::ast::BorrowExprNode* node) {
+void LLVMCodegen::visit(vyn::ast::BorrowExpression* node) {
     // '&expr' or 'borrow expr'
     // This should evaluate 'expr' to get an l-value (a memory location)
     // and then the result of BorrowExprNode is the address itself.
@@ -849,6 +849,16 @@ void LLVMCodegen::visit(vyn::ast::AddrOfExpression* node) {
         return;
     }
     // The value is already the address we need.
+}
+
+void LLVMCodegen::visit(vyn::ast::ListComprehension* node) {
+    logError(node->loc, "LLVM codegen for ListComprehension not yet implemented.");
+    m_currentLLVMValue = nullptr;
+}
+
+void LLVMCodegen::visit(vyn::ast::IfExpression* node) {
+    logError(node->loc, "LLVM codegen for IfExpression not yet implemented.");
+    m_currentLLVMValue = nullptr;
 }
 
 void LLVMCodegen::visit(vyn::ast::FromIntToLocExpression* node) {
@@ -973,33 +983,41 @@ void LLVMCodegen::visit(vyn::ast::ArrayElementExpression* node) {
 }
 
 void LLVMCodegen::visit(vyn::ast::LocationExpression* node) {
-    // Represents a memory location, potentially with an offset.
-    // E.g., `loc(base_addr) + offset` or a symbolic location.
-    // This is highly dependent on Vyn's memory model and 'location' type semantics.
-    // For now, assume it evaluates to some form of pointer.
-    logError(node->loc, "LocationExpression codegen is not fully implemented.");
-    // Placeholder: treat as if it's an identifier that should resolve to a pointer.
-    // if (node->identifier) { // Assuming LocationExpression has an identifier part
-    //    node->identifier->accept(*this);
-    // }
+    // 'loc(expr)': obtain the address of the expression
+    bool oldIsLHS = m_isLHSOfAssignment;
+    m_isLHSOfAssignment = true; // We need the address of the operand
+    node->getExpression()->accept(*this);
+    m_isLHSOfAssignment = oldIsLHS;
+    // After evaluation, m_currentLLVMValue should be a pointer (address)
+    // If not a pointer, emit error
+    if (!m_currentLLVMValue || !m_currentLLVMValue->getType()->isPointerTy()) {
+        logError(node->loc, "loc() operator must yield a pointer (location). Got: " +
+                 (m_currentLLVMValue ? getTypeName(m_currentLLVMValue->getType()) : std::string("null")));
+    }
+    // Otherwise, m_currentLLVMValue is the pointer result
+}
+
+// --- ConstructionExpression ---
+void LLVMCodegen::visit(vyn::ast::ConstructionExpression* node) {
+    logError(node->loc, "ConstructionExpression codegen is not implemented yet.");
     m_currentLLVMValue = nullptr;
 }
 
-void LLVMCodegen::visit(vyn::ast::ListComprehension* node) {
-    // [expr for item in iterable if condition]
-    // This is a complex expression that involves loop generation and list building.
-    // It's often desugared into a loop that appends to a new list.
-    logError(node->loc, "ListComprehension codegen is not implemented yet.");
+void LLVMCodegen::visit(vyn::ast::ArrayInitializationExpression* node) {
+    logError(node->loc, "ArrayInitializationExpression codegen is not implemented yet.");
     m_currentLLVMValue = nullptr;
-    // Basic sketch:
-    // 1. Create a new empty list (e.g., std::vector in C++ or runtime list type).
-    // 2. Codegen the 'iterable' expression.
-    // 3. Create a loop that iterates over 'iterable'.
-    //    - In each iteration, assign current item to 'item' variable (scoped).
-    //    - If 'condition' exists, evaluate it.
-    //    - If condition is true (or no condition), evaluate 'expr'.
-    //    - Append result of 'expr' to the new list.
-    // 4. The value of the comprehension is the new list.
-    // This requires runtime support for lists and iteration protocols.
 }
 
+void LLVMCodegen::visit(vyn::ast::GenericInstantiationExpression* node) {
+    // TODO: Implement LLVM IR generation for GenericInstantiationExpression
+    // This will likely involve:
+    // 1. Visiting the base expression (node->baseExpression) to generate its code.
+    //    The result might be a function pointer or a type descriptor.
+    // 2. Resolving the generic arguments (node->genericArguments) to concrete LLVM types.
+    // 3. If the base is a function, this might involve looking up a specific
+    //    monomorphized version of the function based on the arguments, or generating it.
+    // 4. If the base is a type, this might involve creating a specialized struct type.
+    // For now, as a placeholder:
+    logError(node->loc, "LLVM codegen for GenericInstantiationExpression not yet implemented.");
+    m_currentLLVMValue = nullptr; // Or some other appropriate placeholder value
+}

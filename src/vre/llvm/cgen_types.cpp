@@ -29,15 +29,17 @@ llvm::Type* LLVMCodegen::codegenType(vyn::ast::TypeNode* typeNode) {
     }
 
     llvm::Type* llvmType = nullptr;
+    vyn::ast::TypeNode::Category category = typeNode->getCategory(); // Use getCategory()
 
     // Handle different type categories
-    switch (typeNode->category) {
+    switch (category) { // Use getCategory()
         case vyn::ast::TypeNode::Category::IDENTIFIER: {
-            if (!typeNode->name) {
-                logError(typeNode->loc, "Type identifier node has no name.");
+            auto* typeNameNode = dynamic_cast<vyn::ast::TypeName*>(typeNode);
+            if (!typeNameNode || !typeNameNode->identifier) { // Check typeNameNode and its identifier
+                logError(typeNode->loc, "Type identifier node has no name or is not a TypeName.");
                 return nullptr;
             }
-            std::string typeNameStr = typeNode->name->name;
+            std::string typeNameStr = typeNameNode->identifier->name; // Access name via identifier
 
             if (typeNameStr == "Int" || typeNameStr == "int" || typeNameStr == "i64") {
                 llvmType = int64Type;
@@ -62,8 +64,8 @@ llvm::Type* LLVMCodegen::codegenType(vyn::ast::TypeNode* typeNode) {
                     if (existingType) {
                         llvmType = existingType;
                     } else {
-                        // This case should ideally be caught by semantic analysis if it's an undefined type.
-                        // If it's a type that will be defined later (e.g. in a different module or due to ordering),
+                        // This case should ideally be caught by semantic analysis if it\'s an undefined type.
+                        // If it\'s a type that will be defined later (e.g. in a different module or due to ordering),
                         // creating an opaque struct might be an option, but can be risky.
                         // llvmType = llvm::StructType::create(*context, typeNameStr);
                         logError(typeNode->loc, "Unknown type identifier: " + typeNameStr + ". It might be a forward-declared type not yet fully defined or an undeclared type.");
@@ -74,20 +76,21 @@ llvm::Type* LLVMCodegen::codegenType(vyn::ast::TypeNode* typeNode) {
             break;
         }
         case vyn::ast::TypeNode::Category::ARRAY: {
-            if (!typeNode->arrayElementType) {
-                logError(typeNode->loc, "Array type node has no element type.");
+            auto* arrayTypeNode = dynamic_cast<vyn::ast::ArrayType*>(typeNode);
+            if (!arrayTypeNode || !arrayTypeNode->elementType) { // Check arrayTypeNode and its elementType
+                logError(typeNode->loc, "Array type node has no element type or is not an ArrayType.");
                 return nullptr;
             }
-            llvm::Type* elemTy = codegenType(typeNode->arrayElementType.get());
+            llvm::Type* elemTy = codegenType(arrayTypeNode->elementType.get()); // Access elementType
             if (!elemTy) {
                 logError(typeNode->loc, "Could not determine LLVM type for array element.");
                 return nullptr;
             }
 
-            if (typeNode->arraySizeExpression) {
+            if (arrayTypeNode->sizeExpression) { // Access sizeExpression
                 // For fixed-size arrays. This requires constant evaluation.
                 // Simplified: assumes IntegerLiteral for size.
-                if (auto* intLit = dynamic_cast<vyn::ast::IntegerLiteral*>(typeNode->arraySizeExpression.get())) {
+                if (auto* intLit = dynamic_cast<vyn::ast::IntegerLiteral*>(arrayTypeNode->sizeExpression.get())) { // Access sizeExpression
                     uint64_t arraySize = intLit->value;
                     if (arraySize == 0) { 
                         logError(typeNode->loc, "Array size cannot be zero.");
@@ -105,8 +108,13 @@ llvm::Type* LLVMCodegen::codegenType(vyn::ast::TypeNode* typeNode) {
             break;
         }
         case vyn::ast::TypeNode::Category::TUPLE: {
+            auto* tupleTypeNode = dynamic_cast<vyn::ast::TupleTypeNode*>(typeNode);
+            if (!tupleTypeNode) {
+                logError(typeNode->loc, "Type node is not a TupleTypeNode.");
+                return nullptr;
+            }
             std::vector<llvm::Type*> memberLlvmTypes;
-            for (const auto& memberTypeNode : typeNode->tupleElementTypes) {
+            for (const auto& memberTypeNode : tupleTypeNode->memberTypes) { // Access memberTypes
                 llvm::Type* memberLlvmType = codegenType(memberTypeNode.get());
                 if (!memberLlvmType) {
                     logError(typeNode->loc, "Could not determine LLVM type for a tuple member.");
@@ -117,9 +125,14 @@ llvm::Type* LLVMCodegen::codegenType(vyn::ast::TypeNode* typeNode) {
             llvmType = llvm::StructType::get(*context, memberLlvmTypes);
             break;
         }
-        case vyn::ast::TypeNode::Category::FUNCTION_SIGNATURE: {
+        case vyn::ast::TypeNode::Category::FUNCTION: { // Changed from FUNCTION_SIGNATURE
+            auto* funcTypeNode = dynamic_cast<vyn::ast::FunctionType*>(typeNode);
+            if (!funcTypeNode) {
+                logError(typeNode->loc, "Type node is not a FunctionType.");
+                return nullptr;
+            }
             std::vector<llvm::Type*> paramLlvmTypes;
-            for (const auto& paramTypeNode : typeNode->functionParameters) {
+            for (const auto& paramTypeNode : funcTypeNode->parameterTypes) { // Access parameterTypes
                 llvm::Type* paramLlvmType = codegenType(paramTypeNode.get());
                 if (!paramLlvmType) {
                     logError(typeNode->loc, "Could not determine LLVM type for a function parameter in signature.");
@@ -127,7 +140,7 @@ llvm::Type* LLVMCodegen::codegenType(vyn::ast::TypeNode* typeNode) {
                 }
                 paramLlvmTypes.push_back(paramLlvmType);
             }
-            llvm::Type* returnLlvmType = typeNode->functionReturnType ? codegenType(typeNode->functionReturnType.get()) : voidType;
+            llvm::Type* returnLlvmType = funcTypeNode->returnType ? codegenType(funcTypeNode->returnType.get()) : voidType; // Access returnType
             if (!returnLlvmType) {
                  logError(typeNode->loc, "Could not determine LLVM return type for function signature.");
                 return nullptr;
@@ -135,23 +148,50 @@ llvm::Type* LLVMCodegen::codegenType(vyn::ast::TypeNode* typeNode) {
             llvmType = llvm::FunctionType::get(returnLlvmType, paramLlvmTypes, false)->getPointerTo();
             break;
         }
-        case vyn::ast::TypeNode::Category::OWNERSHIP_WRAPPED: {
-            if (typeNode->wrappedType) {
-                llvm::Type* wrappedLlvmType = codegenType(typeNode->wrappedType.get());
-                if (!wrappedLlvmType) {
-                    logError(typeNode->loc, "Could not determine LLVM type for wrapped type in ownership wrapper.");
-                    return nullptr;
-                }
-                // Assuming all ownership-wrapped types, including 'ptr<T>', become T* in LLVM.
-                // If 'my', 'our', 'their' have different LLVM representations (e.g. a struct),
-                // this logic would need to be more specific based on typeNode->ownership.
-                llvmType = llvm::PointerType::getUnqual(wrappedLlvmType);
-            } else {
-                logError(typeNode->loc, "Ownership-wrapped type has no wrapped type.");
+        case vyn::ast::TypeNode::Category::POINTER: { // Changed from OWNERSHIP_WRAPPED, assuming this is the new equivalent
+            auto* pointerTypeNode = dynamic_cast<vyn::ast::PointerType*>(typeNode);
+            if (!pointerTypeNode || !pointerTypeNode->pointeeType) { // Check pointerTypeNode and its pointeeType
+                logError(typeNode->loc, "Pointer type has no pointee type or is not a PointerType.");
                 return nullptr;
+            }
+            llvm::Type* pointeeLlvmType = codegenType(pointerTypeNode->pointeeType.get()); // Access pointeeType
+            if (!pointeeLlvmType) {
+                logError(typeNode->loc, "Could not determine LLVM type for pointee type in pointer.");
+                return nullptr;
+            }
+            llvmType = llvm::PointerType::getUnqual(pointeeLlvmType);
+            break;
+        }
+        case vyn::ast::TypeNode::Category::OPTIONAL: {
+            auto* optionalTypeNode = dynamic_cast<vyn::ast::OptionalType*>(typeNode);
+            if (!optionalTypeNode || !optionalTypeNode->containedType) {
+                logError(typeNode->loc, "Optional type has no contained type or is not an OptionalType.");
+                return nullptr;
+            }
+            llvm::Type* containedLlvmType = codegenType(optionalTypeNode->containedType.get());
+            if (!containedLlvmType) {
+                logError(typeNode->loc, "Could not determine LLVM type for contained type in optional.");
+                return nullptr;
+            }
+            // Represent optional<T> as a struct { T value; bool has_value; }
+            // Or, if T is a pointer, optional<T*> can be T* (where nullptr means no value).
+            // For simplicity here, let's assume T is not a pointer and use a struct.
+            // A more complex handling might be needed based on Vyn's specific semantics for optionals.
+            if (containedLlvmType->isPointerTy()) {
+                 // If T is already a pointer, optional<T*> can be represented by T* (nullptr for none)
+                llvmType = containedLlvmType;
+            } else {
+                // For non-pointer types, use a struct { value, i1 has_value }
+                // To avoid issues with recursive types if T is this optional type itself (though less common for optionals),
+                // we should ideally name this struct if it's not anonymous.
+                // For now, creating an anonymous struct.
+                llvm::StructType* optionalStructType = llvm::StructType::get(*context, {containedLlvmType, int1Type});
+                llvmType = optionalStructType;
             }
             break;
         }
+        // case vyn::ast::TypeNode::Category::REFERENCE: // TODO: Add handling for REFERENCE if distinct from POINTER
+        // case vyn::ast::TypeNode::Category::SLICE: // TODO: Add handling for SLICE
         default:
             logError(typeNode->loc, "Unknown or unsupported TypeNode category: " + typeNode->toString());
             return nullptr;

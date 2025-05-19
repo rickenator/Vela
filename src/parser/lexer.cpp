@@ -14,6 +14,14 @@ Lexer::Lexer(const std::string& source, const std::string& filePath)
 std::vector<vyn::token::Token> Lexer::tokenize() {
   std::vector<vyn::token::Token> tokens;
 
+  auto maybe_print_token = [this](const vyn::token::Token& token) {
+    if (verbose_) {
+      std::cout << "[TOKEN] " << vyn::token_type_to_string(token.type)
+                << " : '" << token.lexeme << "' @ "
+                << token.location.filePath << ":" << token.location.line << ":" << token.location.column << std::endl;
+    }
+  };
+
   while (pos_ < source_.size()) {
     char c = source_[pos_];
     unsigned int current_line_start_for_token = static_cast<unsigned int>(line_);
@@ -50,6 +58,7 @@ std::vector<vyn::token::Token> Lexer::tokenize() {
     if (c == '/' && pos_ + 1 < source_.size() && source_[pos_ + 1] == '/') {
       std::string comment_text = consume_while([](char c_comment_slash) { return c_comment_slash != '\n'; }); 
       tokens.emplace_back(vyn::TokenType::COMMENT, "//" + comment_text, vyn::SourceLocation{current_file_path_, current_line_start_for_token, current_column_start_for_token});
+      maybe_print_token(tokens.back());
       column_ += (2 + comment_text.size()); // Advance column for // and comment text
       continue;
     }
@@ -58,6 +67,7 @@ std::vector<vyn::token::Token> Lexer::tokenize() {
       std::string word = consume_while([this](char c_id) { return is_letter(c_id) || is_digit(c_id) || c_id == '_'; });
       vyn::TokenType type = get_keyword_type(word);
       tokens.emplace_back(type, word, vyn::SourceLocation{current_file_path_, current_line_start_for_token, current_column_start_for_token});
+      maybe_print_token(tokens.back());
       column_ += word.size();
       continue;
     }
@@ -71,6 +81,7 @@ std::vector<vyn::token::Token> Lexer::tokenize() {
       // pos_ is at the character immediately after int_part_str
       if (pos_ + 1 < source_.size() && source_[pos_] == '.' && source_[pos_ + 1] == '.') {
         tokens.emplace_back(vyn::TokenType::INT_LITERAL, int_part_str, vyn::SourceLocation{current_file_path_, current_line_start_for_token, current_column_start_for_token});
+        maybe_print_token(tokens.back());
         column_ += int_part_str.size();
         continue;
       }
@@ -93,6 +104,7 @@ std::vector<vyn::token::Token> Lexer::tokenize() {
         }
 
         tokens.emplace_back(vyn::TokenType::FLOAT_LITERAL, float_str, vyn::SourceLocation{current_file_path_, current_line_start_for_token, current_column_start_for_token});
+        maybe_print_token(tokens.back());
         column_ += float_str.size();
         continue;
       }
@@ -101,19 +113,21 @@ std::vector<vyn::token::Token> Lexer::tokenize() {
       }
       else {
         tokens.emplace_back(vyn::TokenType::INT_LITERAL, int_part_str, vyn::SourceLocation{current_file_path_, current_line_start_for_token, current_column_start_for_token});
+        maybe_print_token(tokens.back());
         column_ += int_part_str.size();
         continue;
       }
     }
 
-    if (c == '\"') { // Escaped quote: \"
+    if (c == '"') { // Escaped quote: \"
       pos_++; // Consume opening quote
       // current_column_start_for_token is before the opening quote
-      std::string str_value = consume_while([](char c_str) { return c_str != '\"'; });
-      if (pos_ >= source_.size() || source_[pos_] != '\"') {
+      std::string str_value = consume_while([](char c_str) { return c_str != '"'; });
+      if (pos_ >= source_.size() || source_[pos_] != '"') {
           throw std::runtime_error("Unterminated string literal at line " + std::to_string(current_line_start_for_token) + ", column " + std::to_string(current_column_start_for_token));
       }
       tokens.emplace_back(vyn::TokenType::STRING_LITERAL, str_value, vyn::SourceLocation{current_file_path_, current_line_start_for_token, current_column_start_for_token});
+      maybe_print_token(tokens.back());
       pos_++; // Consume closing quote
       column_ += str_value.size() + 2; // +2 for the quotes
       continue;
@@ -122,6 +136,7 @@ std::vector<vyn::token::Token> Lexer::tokenize() {
     // Helper for single/double char tokens
     auto emit_token = [&](vyn::TokenType type, const std::string& lexeme_val) {
         tokens.emplace_back(type, lexeme_val, vyn::SourceLocation{current_file_path_, current_line_start_for_token, current_column_start_for_token});
+        maybe_print_token(tokens.back());
         pos_ += lexeme_val.size();
         column_ += lexeme_val.size();
     };
@@ -232,10 +247,12 @@ std::vector<vyn::token::Token> Lexer::tokenize() {
 
   while (indent_levels_.size() > 1) {
     tokens.emplace_back(vyn::TokenType::DEDENT, "", vyn::SourceLocation{current_file_path_, last_line_for_dedent, 1}); // DEDENTs are at column 1 of their effective line
+    maybe_print_token(tokens.back());
     indent_levels_.pop_back();
   }
 
   tokens.emplace_back(vyn::TokenType::END_OF_FILE, "", vyn::SourceLocation{current_file_path_, static_cast<unsigned int>(line_), static_cast<unsigned int>(column_)});
+  maybe_print_token(tokens.back());
 
   return tokens;
 }

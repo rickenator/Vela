@@ -13,6 +13,7 @@ class Lexer {
 public:
   explicit Lexer(const std::string& source, const std::string& filePath); // Added filePath
   std::vector<vyn::token::Token> tokenize(); // Changed Token to vyn::token::Token
+  void set_verbose(bool v) { verbose_ = v; }
 
 private:
   std::string consume_while(std::function<bool(char)> pred) {
@@ -38,6 +39,7 @@ private:
   int column_;
   std::vector<int> indent_levels_;
   int nesting_level_; 
+  bool verbose_ = false;
 };
 
 #endif // VYN_PARSER_LEXER_HPP

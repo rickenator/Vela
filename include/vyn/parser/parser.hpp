@@ -12,21 +12,53 @@
 #include <optional>
 #include <iostream> // For debug output
 #include <functional> // Added for std::function
+#include <set> // For parser verbose specifiers
+#include <catch2/interfaces/catch_interfaces_capture.hpp> // For accessing current test name
 
 namespace vyn { // Changed Vyn to vyn
 
-    // Debug output utility macro
-    #ifdef VERBOSE
-        #define DEBUG_PRINT(msg) std::cerr << "[DEBUG] " << __FUNCTION__ << ": " << msg << std::endl
-        #define DEBUG_TOKEN(token) std::cerr << "[TOKEN] " << vyn::token_type_to_string(token.type) \
-                                            << " (" << token.lexeme << ") at " \
-                                            << token.location.filePath << ":" \
-                                            << token.location.line << ":" \
-                                            << token.location.column << std::endl
-    #else
-        #define DEBUG_PRINT(msg)
-        #define DEBUG_TOKEN(token)
-    #endif
+    // Forward declaration for SourceLocation if not already included via ast.hpp indirectly
+    // struct SourceLocation; // Assuming SourceLocation is in the vyn namespace
+
+    // Helper function for converting SourceLocation to string
+    // Moved from declaration_parser.cpp to be available more broadly
+    inline std::string location_to_string(const vyn::SourceLocation& loc) {
+        // Ensure <string> and <iostream> or similar for std::to_string are included
+        // by files that include parser.hpp, or include them here.
+        // For now, assuming ast.hpp or token.hpp (included above) bring in <string>.
+        // If not, #include <string> might be needed here.
+        return loc.filePath + ":" + std::to_string(loc.line) + ":" + std::to_string(loc.column);
+    }
+
+    // Runtime parser debug control globals (defined in main.cpp)
+    extern std::set<std::string> g_verbose_parser_test_specifiers;
+    extern bool g_make_all_parser_verbose;
+    extern bool g_suppress_all_parser_debug_output;
+
+    // Helper to determine if current test should show parser verbose output
+    inline bool should_current_test_be_parser_verbose() {
+        if (g_suppress_all_parser_debug_output) return false;
+        if (g_make_all_parser_verbose) return true;
+        if (g_verbose_parser_test_specifiers.empty()) return false;
+        std::string current_test_name = Catch::getResultCapture().getCurrentTestName();
+        if (!current_test_name.empty()) {
+            if (g_verbose_parser_test_specifiers.count(current_test_name)) return true;
+            for (const auto& spec : g_verbose_parser_test_specifiers) {
+                if (current_test_name.find(spec) != std::string::npos) return true;
+            }
+        }
+        return false;
+    }
+
+    // Debug output utility macros for parser
+    #undef DEBUG_PRINT
+    #undef DEBUG_TOKEN
+    #define DEBUG_PRINT(msg) do { if (should_current_test_be_parser_verbose()) std::cerr << "[PDEBUG] " << __FUNCTION__ << ": " << msg << std::endl; } while(0)
+    #define DEBUG_TOKEN(token) do { if (should_current_test_be_parser_verbose()) std::cerr << "[PTOKEN] " << vyn::token_type_to_string(token.type) \
+                                                << " (" << token.lexeme << ") at " \
+                                                << token.location.filePath << ":" \
+                                                << token.location.line << ":" \
+                                                << token.location.column << std::endl; } while(0)
 
     // Forward declarations for parser classes within vyn namespace
     class ExpressionParser;
@@ -135,12 +167,18 @@ namespace vyn { // Changed Vyn to vyn
         int indent_level_;
         TypeParser& type_parser_;
         ExpressionParser& expr_parser_;
+        DeclarationParser* decl_parser_; // Keep as is, will be set by constructor or setter
     public:
-        StatementParser(const std::vector<vyn::token::Token>& tokens, size_t& pos, int indent_level, const std::string& file_path, TypeParser& type_parser, ExpressionParser& expr_parser); 
+        StatementParser(const std::vector<token::Token>& tokens, size_t& pos, int indent_level, const std::string& file_path, TypeParser& type_parser, ExpressionParser& expr_parser, DeclarationParser* decl_parser = nullptr);
+        void set_declaration_parser(DeclarationParser* dp); // Setter method
         vyn::ast::StmtPtr parse(); 
         std::unique_ptr<vyn::ast::ExpressionStatement> parse_expression_statement(); 
         std::unique_ptr<vyn::ast::BlockStatement> parse_block(); 
         vyn::ast::ExprPtr parse_pattern(); 
+        vyn::ast::StmtPtr parse_try();
+        vyn::ast::StmtPtr parse_defer();
+        vyn::ast::StmtPtr parse_await();
+        std::unique_ptr<vyn::ast::UnsafeStatement> parse_unsafe(); // Added declaration
     private:
         bool is_statement_start(vyn::TokenType type) const; // Added declaration
         std::unique_ptr<vyn::ast::IfStatement> parse_if(); 
@@ -152,6 +190,11 @@ namespace vyn { // Changed Vyn to vyn
         std::unique_ptr<vyn::ast::VariableDeclaration> parse_var_decl(); 
         std::unique_ptr<vyn::ast::Node> parse_struct_pattern(); 
         std::unique_ptr<vyn::ast::Node> parse_tuple_pattern(); 
+    public:
+        using BaseParser::IsAtEnd;
+        using BaseParser::peek;
+        using BaseParser::consume;
+        using BaseParser::skip_indents_dedents;
     };
 
     class DeclarationParser : public BaseParser {
@@ -172,7 +215,7 @@ namespace vyn { // Changed Vyn to vyn
         std::unique_ptr<vyn::ast::Declaration> parse_enum_declaration();
         std::unique_ptr<vyn::ast::TypeAliasDeclaration> parse_type_alias_declaration();
         std::unique_ptr<vyn::ast::VariableDeclaration> parse_global_var_declaration();
-        std::vector<std::unique_ptr<vyn::ast::GenericParamNode>> parse_generic_params();
+        std::vector<std::unique_ptr<vyn::ast::GenericParameter>> parse_generic_params();
         std::unique_ptr<vyn::ast::Node> parse_param();
         std::unique_ptr<vyn::ast::Declaration> parse_template_declaration();
         std::unique_ptr<vyn::ast::ImportDeclaration> parse_import_declaration();
@@ -182,7 +225,7 @@ namespace vyn { // Changed Vyn to vyn
         bool IsOperator(const vyn::token::Token& token) const;
 
     private:
-        std::unique_ptr<vyn::ast::EnumVariantNode> parse_enum_variant(); 
+        std::unique_ptr<vyn::ast::EnumVariant> parse_enum_variant(); 
         vyn::ast::FunctionParameter parse_function_parameter_struct(); 
     };
 
