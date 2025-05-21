@@ -44,6 +44,68 @@ As the Vyn project grows, a more structured directory layout will be beneficial 
 
 ## Future Language & System Considerations
 
+### Bundles & Sharing System
+
+A planned feature to introduce fine-grained control over module visibility using bundles and sharing:
+
+- **Core Concepts**:
+  - **`bundle(...)`**: Declares which bundles (packages/subsystems) a module belongs to
+  - **`share(...)`**: Controls which bundles can see each declaration
+  - **Import validation**: Ensures modules import only symbols shared with their bundles
+  
+- **Visibility Control**:
+  - `bundle(sort, sort.Core)` at file level declares package membership
+  - `share(all)` exports a symbol to all modules
+  - `share(sort.UI, sort.Database)` exports only to specific bundles
+  - No `share` prefix keeps symbols private to the file
+
+- **Import Rules**:
+  - `import` succeeds only if your bundle list overlaps the target's share list
+  - `smuggle` bypasses visibility checks for special cases
+
+- **Benefits**:
+  - Fine-grained modular packaging without external configuration
+  - Self-documenting module boundaries
+  - Compile-time validation of dependencies
+  - Flexible opt-out via `smuggle`
+
+See `doc/bundles_and_sharing.md` for detailed documentation.
+
+### Auto-Serialization & Runner Behavior
+
+A planned feature to introduce zero-boilerplate JSON serialization for data structures returned from `main()`:
+
+- **Core Functionality**: The Vyn compiler/runtime will automatically:
+  - Call `main()`
+  - Inspect the return type `T`
+  - If `T` implements `ToJson`, print its JSON form
+  - If `T` is `Int`, use it as the process exit code
+  - If `T` implements `ToString`, print its string form
+  - Otherwise, emit a compile-time error
+
+- **Built-in Auto-Derive**:
+  - Primitives (`Int`, `Float`, `Bool`, `String`) will have built-in `to_json`
+  - Collections (`[T]`, `Map<K,V>`, `Maybe<T>`) will auto-serialize if their elements do
+  - Structs and classes will have auto-derived `ToJson` implementations
+
+- **Customization**:
+  - `#[jsonIgnore]` attribute to skip specific fields
+  - `#[jsonName="..."]` to specify custom key names
+  - Manual implementation of `ToJson` to override auto-derivation
+
+- **Type Safety**:
+  - Non-serializable types (functions, raw pointers) will trigger compile-time errors
+  - Clear error messages guiding developers to convert or extract serializable data
+
+- **Runner Behavior**:
+  - Standard mode: `vyn run program.vyn` will auto-print JSON or exit code
+  - Explicit JSON mode: `vyn run --json program.vyn` (future feature)
+  - Proper error handling for exceptions and serialization failures
+
+This feature will enable scripts and API-style binaries to return structured data without manual printing logic, enhancing Vyn's utility for data processing and service development.
+
+### Other Language Considerations
+
 The following points were previously noted in `ROADMAP.txt` and are retained here for future planning:
 
 -   **Template Placement**: Explore allowing template/generic declarations in more contexts beyond just module-level (e.g., within classes, functions) if deemed beneficial for advanced metaprogramming scenarios. Currently, templates are primarily module-level items.

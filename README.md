@@ -72,7 +72,11 @@ Vyn is on a path to become a fully-featured language. Planned developments inclu
 - **Virtual Machine (VM)**: A runtime environment to execute Vyn code efficiently.
 - **Self-Hosted Compiler**: A Vyn compiler written in Vyn, enabling bootstrapping and deeper language control.
 - **Standard Library Expansion**: More utilities for common tasks and module management.
+- **Bundles & Sharing System**: Fine-grained control over module visibility using bundles and declaration-level sharing. See `doc/bundles_and_sharing.md` for details.
+- **Auto-Serialization**: Zero-boilerplate JSON serialization for data structures returned from `main()`, with customization options. See `doc/auto_serialization.md` for details.
 - **Performance Optimizations**: Faster parsing and execution for large-scale projects.
+
+See `doc/ROADMAP.md` for a more detailed development roadmap and future language considerations.
 
 ---
 
@@ -469,6 +473,42 @@ utils = { git = "https://github.com/user/utils" }  # External, smuggled
 ```
 
 Future `vyn pm install` will fetch and verify these dependencies, with `vyn.lock` ensuring reproducibility.
+
+#### 3.6.1 Planned Bundle & Sharing System
+
+A planned extension to Vyn's module system will introduce fine-grained visibility control through bundles and sharing:
+
+```vyn
+// Declare which bundles this module belongs to
+bundle(math, math.Core)
+
+// Public to all modules
+share(all) fn public_function() { ... }
+
+// Only visible to modules that are in the math.UI bundle
+share(math.UI) fn ui_helper() { ... }
+
+// Private to this file
+fn internal_helper() { ... }
+```
+
+Imports will be validated against these visibility rules:
+
+```vyn
+// Allowed only if your module's bundles overlap with the target's shared bundles
+import math::Core
+
+// Always allowed, bypasses visibility checks
+smuggle debug::Logger
+```
+
+This system ensures that symbol visibility is explicitly controlled, with import validation happening at compile time:
+
+- Library modules can export specific symbols to specific bundles
+- Client modules must declare their bundle membership to see non-public symbols
+- All visibility enforcement happens at compile time with no runtime cost
+
+See `doc/bundles_and_sharing.md` for more details on the planned bundle and sharing system.
 
 ## 4. Advanced Programming Constructs
 
