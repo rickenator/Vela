@@ -218,12 +218,12 @@ public:
 
 ### 2.8. `GenericInstanceTypeNode`
 
-Represents an instantiation of a generic type (e.g., `Vec<i32>`, `Map<string, User>`).
+Represents an instantiation of a generic type (e.g., `Vec<i32>`, `Map<string, User>`, `loc<Int>`).
 
 -   **C++ Class**: `vyn::ast::GenericInstanceTypeNode`
 -   **`NodeType`**: `GENERIC_INSTANCE_TYPE_NODE`
 -   **Fields**:
-    -   `genericType` (`TypeNodePtr`): The base generic type (often a `BasicTypeNode` like `Vec`).
+    -   `genericType` (`TypeNodePtr`): The base generic type (often a `BasicTypeNode` like `Vec` or `loc`).
     -   `typeArguments` (`std::vector<TypeNodePtr>`): The type arguments provided for the generic parameters.
 
 ```cpp
@@ -232,7 +232,7 @@ namespace vyn::ast {
 
 class GenericInstanceTypeNode : public TypeNode {
 public:
-    TypeNodePtr genericType; // e.g., BasicTypeNode for "Vec"
+    TypeNodePtr genericType; // e.g., BasicTypeNode for "Vec" or "loc"
     std::vector<TypeNodePtr> typeArguments; // e.g., [BasicTypeNode for "i32"]
 
     GenericInstanceTypeNode(SourceLocation loc, TypeNodePtr genericType, std::vector<TypeNodePtr> typeArguments);
@@ -241,5 +241,25 @@ public:
 
 } // namespace vyn::ast
 ```
+
+#### Memory System Types
+
+Vyn includes specialized types for low-level memory operations, which are typically represented using GenericInstanceTypeNode:
+
+##### `loc<T>` Type
+
+Represents a raw memory location (pointer) of type `T`.
+
+- Syntax: `loc<T>`
+- AST Representation: `GenericInstanceTypeNode` with:
+  - `genericType`: `BasicTypeNode` with name "loc"
+  - `typeArguments`: A vector containing a single entry of the pointee type `T`
+
+This type is used in unsafe code blocks to work with raw memory. Operations on `loc<T>` include:
+- Getting the address of a variable: `loc(x)`
+- Dereferencing a pointer: `at(p)`
+- Converting between pointer types: `from<loc<T>>(addr)`
+
+These operations are typically represented using `ConstructionExpression` or `CallExpression` in the AST.
 
 This structure allows Vyn's AST to accurately represent a wide variety of type constructs found in modern programming languages. The parser (`TypeParser`) is responsible for translating type syntax from the source code into these `TypeNode` structures.

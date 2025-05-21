@@ -77,9 +77,9 @@ Key members and features:
 -   **`vyn::ast::TypeNode`**: The concrete class for type representations (see `AST_Types.md`).
 -   **Pattern Nodes**: Planned for pattern matching (see `AST_Patterns.md` and `AST_Roadmap.md`).
 
-## 2. Node Type Enumeration (`vyn::ast::NodeType`)
+## 2. `NodeType` Enumeration
 
-The `NodeType` enum, defined in `include/vyn/parser/ast.hpp`, identifies each concrete AST node type.
+This enumeration is used to identify the concrete type of an AST node. It is used in implementations of `getType()` in concrete node classes and is useful for pattern-matching-style operations in AST processing.
 
 ```cpp
 // Enum in include/vyn/parser/ast.hpp
@@ -94,7 +94,7 @@ enum class NodeType {
     ARRAY_LITERAL,
     OBJECT_LITERAL,
     NIL_LITERAL,
-
+    
     // Expressions
     UNARY_EXPRESSION,
     BINARY_EXPRESSION,
@@ -125,23 +125,8 @@ enum class NodeType {
     TRY_STATEMENT,
     THROW_STATEMENT,        // Added as per ast.hpp
     SCOPED_STATEMENT,       // Added as per ast.hpp
+    UNSAFE_BLOCK_STATEMENT, // For unsafe memory operations
     // PATTERN_ASSIGNMENT_STATEMENT, // Not in ast.hpp, but in roadmap
-
-    // Declarations
-    VARIABLE_DECLARATION,
-    FUNCTION_DECLARATION,   // Also FunctionParameter helper struct
-    TYPE_ALIAS_DECLARATION,
-    IMPORT_DECLARATION,     // Also ImportSpecifier helper struct
-    STRUCT_DECLARATION,
-    CLASS_DECLARATION,
-    FIELD_DECLARATION,
-    IMPL_DECLARATION,
-    ENUM_DECLARATION,       // Also EnumVariant helper struct
-    ENUM_VARIANT,           // Helper struct, also a node type
-    GENERIC_PARAMETER,
-    TEMPLATE_DECLARATION,
-    TRAIT_DECLARATION,      // Added as per ast.hpp
-    METHOD_SIGNATURE,       // Added as per ast.hpp
 
     // Types
     TYPE_NODE,              // General type representation
@@ -153,6 +138,11 @@ enum class NodeType {
     TUPLE_TYPE_NODE,        // e.g. (i32, bool) (Added as per ast.hpp)
     OPTIONAL_TYPE_NODE,     // e.g. ?i32 (Added as per ast.hpp)
     GENERIC_INSTANCE_TYPE_NODE, // e.g. Vec<i32> (Added as per ast.hpp)
+
+    // Memory system types (represented using existing nodes)
+    // LOC_TYPE - Represented using GENERIC_INSTANCE_TYPE_NODE with name "loc"
+    // AT_INTRINSIC - Represented using CALL_EXPRESSION or CONSTRUCTION_EXPRESSION  
+    // FROM_INTRINSIC - Represented using CONSTRUCTION_EXPRESSION with generic target type
 
     // Other
     MODULE,

@@ -268,4 +268,43 @@ public:
 } // namespace vyn::ast
 ```
 
+## 10. `UnsafeBlockStatement`
+
+Represents an unsafe code block where memory operations are allowed.
+
+-   **C++ Class**: `vyn::ast::UnsafeBlockStatement`
+-   **`NodeType`**: `UNSAFE_BLOCK_STATEMENT`
+-   **Fields**:
+    -   `body` (`BlockStatementPtr`): A pointer to the block statement containing the code in the unsafe block.
+
+```cpp
+// From include/vyn/parser/ast.hpp
+namespace vyn::ast {
+class UnsafeBlockStatement : public Statement {
+public:
+    BlockStatementPtr body;
+
+    UnsafeBlockStatement(SourceLocation loc, BlockStatementPtr body);
+    // ... accept, getType, toString methods ...
+};
+} // namespace vyn::ast
+```
+
+Unsafe blocks are used to contain low-level memory operations that could be unsafe if used incorrectly. Within an unsafe block, you can:
+
+1. Create raw pointers with `loc<T>(expr)`
+2. Dereference pointers with `at(ptr)`
+3. Convert between pointer types with `from<loc<T>>(addr)`
+
+Example:
+```vyn
+unsafe {
+    var p: loc<Int> = loc(x);
+    at(p) = 99;  // Modify the value at the pointer location
+    var q = at(p); // Read the value at the pointer location
+}
+```
+
+These operations are unsafe because they bypass Vyn's memory safety guarantees, allowing for potential errors like null pointer dereferences, dangling pointers, and memory corruption.
+
 *Note: `PatternAssignmentStatement` is mentioned in `AST_Roadmap.md` but not currently present in `vyn/parser/ast.hpp`'s statement definitions. It will be added here once implemented.*

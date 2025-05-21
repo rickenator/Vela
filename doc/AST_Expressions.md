@@ -401,4 +401,108 @@ public:
 } // namespace vyn::ast
 ```
 
+## 17. `ConstructionExpression`
+
+Represents a constructor call or type instantiation expression (e.g., `MyStruct(1, "hello")`, `Vec<i32>(10)`). This node is also used for various intrinsics and type conversions.
+
+-   **C++ Class**: `vyn::ast::ConstructionExpression`
+-   **`NodeType`**: `CONSTRUCTION_EXPRESSION`
+-   **Fields**:
+    -   `constructedType` (`TypeNodePtr`): The type being constructed or instantiated.
+    -   `arguments` (`std::vector<ExprPtr>`): The arguments passed to the constructor.
+
+```cpp
+// From include/vyn/parser/ast.hpp
+namespace vyn::ast {
+class ConstructionExpression : public Expression {
+public:
+    TypeNodePtr constructedType; // The type being constructed (e.g., MyStruct, my_module::MyType<T>)
+    std::vector<ExprPtr> arguments;
+
+    ConstructionExpression(SourceLocation loc, TypeNodePtr constructedType, std::vector<ExprPtr> arguments);
+    // ... accept, getType, toString methods ...
+};
+} // namespace vyn::ast
+```
+
+### Memory Operation Expressions
+
+Several memory operations in Vyn are represented using `ConstructionExpression` or `CallExpression` nodes:
+
+#### 1. Creating pointers with `loc<T>(expr)`
+
+Creates a pointer to a variable's memory location.
+
+```
+var x: Int = 42;
+var p: loc<Int> = loc(x); // Creates a pointer to x
+```
+
+AST Representation:
+- When parsed as a `ConstructionExpression`:
+  - `constructedType`: A `TypeName` node for "loc"
+  - `arguments`: A vector containing one expression (the variable being pointed to)
+
+#### 2. Converting between pointer types with `from<loc<T>>(expr)`
+
+Converts an integer address or a different pointer type to a specific pointer type.
+
+```
+var addr: Int = 0x12345678;
+var p: loc<Int> = from<loc<Int>>(addr); // Converts integer to pointer
+```
+
+AST Representation:
+- Typically a `ConstructionExpression` with:
+  - `constructedType`: A `GenericInstanceTypeNode` with the target type (e.g., `from<loc<Int>>`)
+  - `arguments`: A vector containing one expression (the value to convert)
+
+#### 3. Pointer dereferencing with `at(ptr)`
+
+Accesses the value at a pointer's memory location.
+
+```
+var p: loc<Int> = loc(x);
+var y: Int = at(p); // Reads from pointer
+at(p) = 99;         // Writes to pointer
+```
+
+AST Representation:
+- When parsed as a `CallExpression`:
+  - `callee`: An `Identifier` node for "at"
+  - `arguments`: A vector containing one expression (the pointer to dereference)
+- When parsed as a `ConstructionExpression`:
+  - `constructedType`: A `TypeName` node for "at" 
+  - `arguments`: A vector containing one expression (the pointer to dereference)
+
+Note that the behavior of `at(ptr)` depends on context:
+- On the right-hand side of an assignment: Returns the value at the pointer's address
+- On the left-hand side of an assignment: Returns the pointer itself to enable direct assignment
+
+## 18. `ArrayInitializationExpression`
+
+Represents the initialization of an array with a specific type and size, potentially with an initializer list (e.g., `[int; 3](1, 2, 3)` or `[int; 10]()`).
+
+-   **C++ Class**: `vyn::ast::ArrayInitializationExpression`
+-   **`NodeType`**: `ARRAY_INITIALIZATION_EXPRESSION`
+-   **Fields**:
+    -   `elementType` (`TypeNodePtr`): The type of the array elements.
+    -   `size` (`ExprPtr`): The size of the array.
+    -   `initializerList` (`std::optional<std::vector<ExprPtr>>`): Optional list of expressions to initialize array elements.
+
+```cpp
+// From include/vyn/parser/ast.hpp
+namespace vyn::ast {
+class ArrayInitializationExpression : public Expression {
+public:
+    TypeNodePtr elementType;
+    ExprPtr size;
+    std::optional<std::vector<ExprPtr>> initializerList;
+
+    ArrayInitializationExpression(SourceLocation loc, TypeNodePtr elementType, ExprPtr size, std::optional<std::vector<ExprPtr>> initializerList);
+    // ... accept, getType, toString methods ...
+};
+} // namespace vyn::ast
+```
+
 *Note: `TernaryExpression` was previously listed but is not present in `include/vyn/parser/ast.hpp` and has been removed. Other expression types might be detailed in `AST_Literals.md` (like `Identifier`) or `AST_Types.md` (if type constructs can be expressions).* For planned expressions, refer to `AST_Roadmap.md`.

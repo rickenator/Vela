@@ -19,6 +19,8 @@ This documentation is split into several parts:
 *   **[Declarations](./AST_Declarations.md)**: Details AST nodes for declarations (variables, functions, structs, enums, etc.).
 *   **[Types](./AST_Types.md)**: Focuses on AST nodes related to type representations (`TypeNode`).
 *   **[Patterns](./AST_Patterns.md)**: *(Planned)* Describes AST nodes for pattern matching constructs.
+*   **[Memory Operations](./Memory_Operations.md)**: Explains Vyn's memory model and the operations for low-level memory manipulation.
+*   **[Intrinsics](./Intrinsics.md)**: Details built-in compiler intrinsics, including memory operations like `loc`, `at`, and `from`.
 *   **[Design Considerations](./AST_Design_Considerations.md)**: Discusses various design choices, alternatives, and rationale behind the AST structure. This includes topics like memory management, error handling, and potential future enhancements.
 *   **[Roadmap](./AST_Roadmap.md)**: Outlines planned AST nodes and future development directions for the AST.
 
