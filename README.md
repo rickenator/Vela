@@ -6,7 +6,7 @@
 
 ## 1. Introduction
 
-Welcome to the Vyn Programming Guide. This guide walks you through writing, building, and extending Vyn programs, from your first “Hello, Vyn!” to deep dives into the Vyn language internals and runtime. Version 0.3.1 delivers a robust parser with support for advanced constructs like asynchronous programming, generic templates, operator overloading, and class declarations within templates, validated by a comprehensive test suite (34/34 tests passing).
+Welcome to the Vyn Programming Guide. This guide walks you through writing, building, and extending Vyn programs, from your first “Hello, Vyn!” to deep dives into the Vyn language internals and runtime. Version 0.3.2 delivers a robust parser with support for advanced constructs like asynchronous programming, generic templates, operator overloading, and class declarations within templates, validated by a comprehensive test suite (35/58 tests passing).
 
 ### 1.1 Purpose & Audience
 
@@ -54,7 +54,7 @@ Vyn is a statically typed, template-metaprogramming language designed to compile
 *   **Borrowing**:
     *   `view <expr>`: Creates an immutable borrow `their<T const>`.
     *   `borrow <expr>`: Creates a mutable borrow `their<T>`.
-*   **`unsafe` Blocks**: Sections of code marked `unsafe { ... }` where raw pointers (`ptr<T>`) can be used and some compiler guarantees are relaxed.
+*   **`unsafe` Blocks**: Sections of code marked `unsafe { ... }` where raw pointers (`loc<T>`) can be used and some compiler guarantees are relaxed. Within these blocks, operations like `at(ptr)` for dereferencing and `from<loc<T>>()` for pointer conversion are available.
 *   **Scoped Block**: Planned block prefixed with `scoped` that defers GC and cleans up at block exit.
 *   **Actor**: Planned lightweight concurrent entity with a built-in mailbox for message passing.
 *   **Tiered JIT**: Planned two-level execution—bytecode interpreter for startup, optimized native JIT for hot code.
@@ -250,28 +250,152 @@ Controlled by applying `const` to the type `T` *within* the ownership wrapper:
     ```
 The compiler enforces borrow-checking rules to ensure memory safety.
 
-**Raw Pointers (`ptr<T>`) and `unsafe`**:
-For low-level operations, Vyn provides raw pointers `ptr<T>`. Operations involving `ptr<T>` (like dereferencing) are generally restricted to `unsafe` blocks.
+**Raw Memory Operations and `unsafe`**:
+For low-level operations requiring direct memory access, Vyn provides the `loc<T>` type and related intrinsics. These operations are restricted to `unsafe` blocks to ensure memory safety in normal code.
+
 ```vyn
-var raw_ptr: ptr<Int>;
+var x: Int = 42;
 unsafe {
-    // Operations with raw_ptr
+    var p: loc<Int> = loc(x);  // Get pointer to x
+    at(p) = 99;               // Write to memory at p
+    var y: Int = at(p);       // Read from memory at p
+    
+    // Convert between pointer types
+    var addr: Int = 0x12345678;
+    var q: loc<Int> = from<loc<Int>>(addr);
 }
 ```
 
-**Manual Management (`loc<T>`, `unsafe`)**: For low-level control, raw locations (`loc<T>`) can be used within `unsafe` blocks, with manual allocation (`alloc`) and deallocation (`free`) functions. This is intended for specific performance-critical sections or FFI.
+**Memory Operations in `unsafe` Blocks**:
 
-  - `loc<T>`: A raw location (like a pointer, but with explicit, safe syntax and semantics).
-  - `loc(expr)` or `at(expr)`: Explicit dereference of a raw location, both as lvalue and rvalue. Both forms are supported for ergonomic and linguistic reasons.
-  - All raw location operations are gated by `unsafe { ... }` blocks, ensuring that unsafe memory access is always explicit and localized.
+- **`loc<T>`**: A raw pointer type representing a memory location containing a value of type `T`.
+- **`loc(expr)`**: Creates a pointer to the memory location of `expr`. Returns a value of type `loc<T>`.
+- **`at(p)`**: Dereferences the pointer `p`. Can be used both as an lvalue (for writing) and an rvalue (for reading).
+- **`from<loc<T>>(expr)`**: Converts between pointer types or from an integer address to a typed pointer.
+- All operations with `loc<T>` must be performed within `unsafe { ... }` blocks, ensuring that unsafe memory access is always explicit and contained.
 
 Safe code uses only `my<T>`, `our<T>`, and `their<T>` for ownership and borrowing. Use of `loc<T>` is reserved for advanced/unsafe scenarios, and is never required for ordinary programming.
 
-See `doc/mem_RFC.md` for full details on the memory model, ownership, and safety guarantees.
+See `doc/Memory_Operations.md` and `doc/Intrinsics.md` for full details on the memory model, ownership, and safety guarantees.
 
 These concepts extend to function parameters and struct/class fields, allowing fine-grained control over how data is passed and managed.
 
-### 3.3 Control Flow (if, for, while, match)
+### 3.3 Unsafe Memory Operations
+
+Vyn's design philosophy emphasizes safety by default, but provides escape hatches for low-level memory manipulation when needed. These operations are contained within `unsafe` blocks to clearly mark code that requires special attention.
+
+#### 3.3.1 The `unsafe` Block
+
+An `unsafe` block is a lexical scope that permits operations that might violate Vyn's memory safety guarantees:
+
+```vyn
+unsafe {
+    // Unsafe operations are permitted here
+}
+```
+
+Outside of `unsafe` blocks, the compiler enforces memory safety through ownership, borrowing, and lifetime rules.
+
+#### 3.3.2 Raw Pointers with `loc<T>`
+
+The `loc<T>` type represents a raw pointer to a memory location containing a value of type `T`:
+
+```vyn
+var x: Int = 42;
+var p: loc<Int>; // Raw pointer type
+
+unsafe {
+    p = loc(x);  // Gets the address of x
+}
+```
+
+#### 3.3.3 Pointer Operations
+
+Within `unsafe` blocks, several intrinsics provide low-level memory manipulation:
+
+**Creating Pointers**:
+```vyn
+unsafe {
+    var p: loc<Int> = loc(myVariable);  // Points to myVariable
+}
+```
+
+**Reading and Writing Memory**:
+```vyn
+unsafe {
+    // Reading from a pointer
+    var value: Int = at(p);
+    
+    // Writing to a pointer
+    at(p) = 99;
+}
+```
+
+**Pointer Type Conversion**:
+```vyn
+unsafe {
+    // Convert between pointer types
+    var p_void: loc<Void> = loc(x);
+    var p_int: loc<Int> = from<loc<Int>>(p_void);
+    
+    // Convert from integer address to pointer
+    var addr: Int = 0x12345678;
+    var p_addr: loc<Int> = from<loc<Int>>(addr);
+}
+```
+
+#### 3.3.4 Complete Example
+
+Here's a complete example demonstrating memory operations in Vyn:
+
+```vyn
+fn modify_through_pointer(x: Int) -> Int {
+  var result: Int = 0;
+  
+  unsafe {
+    // Create a pointer to the local variable
+    var p: loc<Int> = loc(result);
+    
+    // Modify the memory directly
+    at(p) = x * 2;
+    
+    // Create a pointer to a different type and convert back
+    var p_void: loc<Void> = from<loc<Void>>(p);
+    var p_back: loc<Int> = from<loc<Int>>(p_void);
+    
+    // Read through the converted pointer
+    result = at(p_back);
+  }
+  
+  return result;
+}
+```
+
+#### 3.3.5 Safety Guidelines
+
+When using unsafe operations:
+
+1. Minimize the scope of `unsafe` blocks to contain only the operations that require it
+2. Document all invariants and assumptions thoroughly in comments
+3. Encapsulate unsafe operations behind safe abstractions when possible
+4. Validate pointers before dereferencing them
+5. Be careful with pointer type conversions and ensure the original and target types are compatible
+6. Avoid holding pointers to stack variables beyond their scope
+7. Use memory barriers and synchronization when accessing shared memory across threads
+8. Test unsafe code extensively with memory analysis tools
+9. Consider alternatives to unsafe code when possible, even if it means a small performance cost
+
+#### 3.3.6 Future Memory Intrinsics
+
+The following memory-related intrinsics are planned for future implementation:
+
+- **`sizeof<T>()`**: Returns the size of type `T` in bytes
+- **`alignof<T>()`**: Returns the alignment requirement of type `T` in bytes
+- **`offsetof<T>(field)`**: Returns the offset of a field within a structure
+- **`alloc<T>(count)`**: Allocates memory for `count` objects of type `T`
+- **`free<T>(ptr)`**: Deallocates memory previously allocated with `alloc`
+
+### 3.4 Control Flow (if, for, while, match)
 
 Vyn supports standard control structures:
 
@@ -297,7 +421,7 @@ match opt {
 }
 ```
 
-### 3.4 Functions & Nested Functions
+### 3.5 Functions & Nested Functions
 
 Functions form the basic unit of behavior. You can nest functions inside other functions, capturing outer variables:
 
@@ -319,7 +443,7 @@ let squares = nums.map(fn(n) -> Int { n * n })  # Will pass lambda directly
 
 Under the hood, lambdas will produce a function object that can capture surrounding variables by value or reference, depending on usage.
 
-### 3.5 Modules & Imports
+### 3.6 Modules & Imports
 
 Organize code into modules by file or planned `module` declarations. Import or smuggle symbols:
 
@@ -477,7 +601,7 @@ Vyn's memory management is built upon its ownership and borrowing system (`my<T>
 
     Safe code uses only `my<T>`, `our<T>`, and `their<T>` for ownership and borrowing. Use of `loc<T>` is reserved for advanced/unsafe scenarios, and is never required for ordinary programming.
 
-    See `doc/mem_RFC.md` for full details on the memory model, ownership, and safety guarantees.
+    See `doc/Memory_Operations.md` and `doc/Intrinsics.md` for full details on the memory model, ownership, and safety guarantees.
 *   **Scoped Cleanup**: The planned `scoped { ... }` blocks will offer a way to manage resources with RAII-like semantics, ensuring cleanup at the end of the scope, potentially interacting with the GC by deferring collection for objects created within the scope.
 
 This hybrid approach allows developers to choose the most appropriate memory management strategy for different parts of their application, balancing safety, performance, and convenience.
