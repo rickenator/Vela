@@ -335,8 +335,7 @@ bool StatementParser::is_statement_start(vyn::TokenType type) const {
         case vyn::TokenType::LBRACE:
         case vyn::TokenType::KEYWORD_BREAK:
         case vyn::TokenType::KEYWORD_CONTINUE:
-        // Expression statements can start with anything an expression can start with
-        // This is handled by falling through to is_expression_start or by the default case in parse()
+        case vyn::TokenType::KEYWORD_UNSAFE: // <-- Added this line
             return true;
         default:
             return this->expr_parser_.is_expression_start(type); // Changed: An expression can also be a statement

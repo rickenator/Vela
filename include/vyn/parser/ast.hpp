@@ -138,6 +138,15 @@ struct FunctionParameter {
         : name(std::move(n)), typeNode(std::move(tn)) {}
 };
 
+struct ObjectProperty {
+    SourceLocation loc;
+    IdentifierPtr key; // Property key
+    ExprPtr value;     // Property value
+
+    ObjectProperty(SourceLocation loc, IdentifierPtr key, ExprPtr value)
+        : loc(loc), key(std::move(key)), value(std::move(value)) {}
+};
+
 struct ImportSpecifier {
     std::unique_ptr<Identifier> importedName;
     std::unique_ptr<Identifier> localName;
@@ -324,6 +333,7 @@ class Node {
 public:
     SourceLocation loc; 
     std::string inferredTypeName; 
+    std::shared_ptr<TypeNode> type;  // Add type member
 
     Node(SourceLocation loc) : loc(loc) {}
     virtual ~Node() = default;
@@ -417,6 +427,20 @@ public:
     std::string toString() const override; 
 };
 
+// New: ObjectLiteral
+class ObjectLiteral : public Expression {
+public:
+    TypeNodePtr typePath; // Optional type path for typed object literals
+    std::vector<ObjectProperty> properties;
+
+    ObjectLiteral(SourceLocation loc, TypeNodePtr typePath, std::vector<ObjectProperty> properties);
+    ~ObjectLiteral() override; // Ensure virtual destructor
+    NodeType getType() const override;
+    std::string toString() const override;
+    void accept(Visitor& visitor) override;
+};
+
+
 // Represents a borrow or view expression: borrow expr, view expr
 class BorrowExpression : public Expression { // Renamed from BorrowExprNode
 public:
@@ -451,75 +475,49 @@ public:
     const ExprPtr& getLocation() const { return location; }
 };
 
-// Represents conversion from integer to loc<T>: from(addr)
+// Represents conversion from integer to loc<T>: from<Type>(addr)
 class FromIntToLocExpression : public Expression {
-    ExprPtr address;
 public:
-    FromIntToLocExpression(SourceLocation loc, ExprPtr address);
+    FromIntToLocExpression(const SourceLocation& loc, ExprPtr addr_expr, TypeNodePtr target_ty)
+        : Expression(loc), address_expr(std::move(addr_expr)), target_type(std::move(target_ty)) {}
+
+    const ExprPtr& getAddressExpression() const { return address_expr; }
+    const TypeNodePtr& getTargetType() const { return target_type; }
+
     NodeType getType() const override;
     std::string toString() const override;
     void accept(Visitor& visitor) override;
-    ExprPtr& getAddress() { return address; }
-    const ExprPtr& getAddress() const { return address; }
+
+private:
+    ExprPtr address_expr;
+    TypeNodePtr target_type;
 };
 
-// New: Represents loc(expression)
-class LocationExpression : public Expression {
-    ExprPtr expression;
-public:
-    LocationExpression(SourceLocation loc, ExprPtr expression);
-    NodeType getType() const override;
-    std::string toString() const override;
-    void accept(Visitor& visitor) override;
-    ExprPtr& getExpression() { return expression; }
-    const ExprPtr& getExpression() const { return expression; }
-};
-
-// --- Full Class Definition for ArrayElementExpression ---
-// Placed after Node, Statement, Declaration, NodeType, Visitor, Identifier are defined.
+// New: ArrayElementExpression - Represents element access: array[index]
 class ArrayElementExpression : public Expression {
 public:
-    ExprPtr object; // The array or pointer object
+    ExprPtr array;  // The array expression
     ExprPtr index;  // The index expression
 
-    ArrayElementExpression(SourceLocation loc, ExprPtr object, ExprPtr index)
-        : Expression(loc), object(std::move(object)), index(std::move(index)) {}
-
-    NodeType getType() const override { return NodeType::ARRAY_ELEMENT_EXPRESSION; }
-    std::string toString() const override {
-        // Ensure object and index are not null before calling toString on them
-        std::string objStr = object ? object->toString() : "null_obj";
-        std::string idxStr = index ? index->toString() : "null_idx";
-        return objStr + "[" + idxStr + "]";
-    }
-    void accept(Visitor& visitor) override { visitor.visit(this); }
-};
-// --- End of ArrayElementExpression Definition ---
-
-// Represents one key-value pair in an object literal
-struct ObjectProperty {
-    SourceLocation loc; // Location of the property itself (key or key:value)
-    std::unique_ptr<Identifier> key; // Property key (must be an identifier for now, can be extended to StringLiteral or computed)
-    ExprPtr value; // Property value
-
-    // Make members public for direct access from ObjectLiteral::toString()
-public:
-    ObjectProperty(SourceLocation loc, std::unique_ptr<Identifier> key, ExprPtr value)
-        : loc(loc), key(std::move(key)), value(std::move(value)) {}
-};
-
-
-class ObjectLiteral : public Expression {
-public:
-    TypeNodePtr typePath; // Optional: For typed struct literals like MyType { ... }
-    std::vector<ObjectProperty> properties;
-
-    ObjectLiteral(SourceLocation loc, TypeNodePtr typePath, std::vector<ObjectProperty> properties);
-    virtual ~ObjectLiteral();
+    ArrayElementExpression(SourceLocation loc, ExprPtr array, ExprPtr index);
+    ~ArrayElementExpression() override; // Was: default;
     NodeType getType() const override;
     std::string toString() const override;
     void accept(Visitor& visitor) override;
 };
+
+// New: LocationExpression - Represents loc(expression)
+class LocationExpression : public Expression {
+public:
+    ExprPtr expression; // The expression whose location is being taken
+
+    LocationExpression(SourceLocation loc, ExprPtr expression);
+    ~LocationExpression() override; // Was: default;
+    NodeType getType() const override;
+    std::string toString() const override;
+    void accept(Visitor& visitor) override;
+};
+
 
 // New NilLiteral Node
 class NilLiteral : public Expression {
@@ -539,6 +537,7 @@ public:
     ExprPtr conditionExpr;      // Optional condition (e.g., 'if x > 0')
 
     ListComprehension(SourceLocation loc, ExprPtr elementExpr, IdentifierPtr loopVariable, ExprPtr iterableExpr, ExprPtr conditionExpr = nullptr);
+    ~ListComprehension() override; // Was: default;
     NodeType getType() const override;
     std::string toString() const override;
     void accept(Visitor& visitor) override;
@@ -848,15 +847,16 @@ class TypeNode : public Node {
 public:
     // Define TypeCategory as a nested enum
     enum class Category {
-        IDENTIFIER,     // e.g., int, MyStruct
-        POINTER,        // e.g., *T, *const T
-        ARRAY,          // e.g., [T; N], [T]
-        FUNCTION,       // e.g., fn(T1, T2) -> R
-        TUPLE,          // e.g., (T1, T2)
-        OPTIONAL,       // e.g., ?T
-        REFERENCE,      // e.g., &T, &mut T
-        SLICE,          // e.g., &[T]
-        UNKNOWN         // Placeholder or error
+        IDENTIFIER,
+        POINTER,
+        ARRAY,
+        FUNCTION,
+        TUPLE,
+        OPTIONAL,
+        REFERENCE,
+        SLICE,
+        STRUCT,
+        UNKNOWN
     };
 
     TypeNode(SourceLocation loc) : Node(loc) {}
@@ -874,12 +874,17 @@ public:
             case Category::OPTIONAL:       std::cout << "TypeNode Category: OPTIONAL\n"; break;
             case Category::REFERENCE:      std::cout << "TypeNode Category: REFERENCE\n"; break;
             case Category::SLICE:          std::cout << "TypeNode Category: SLICE\n"; break;
+            case Category::STRUCT:         std::cout << "TypeNode Category: STRUCT\n"; break;
             case Category::UNKNOWN:        std::cout << "TypeNode Category: UNKNOWN\n"; break;
         }
     }
 
     virtual Category getCategory() const = 0; // Pure virtual function for getting the category
     // NodeType getType() const override { return NodeType::TYPE_NODE; } // Each derived type should specify
+
+    virtual bool isIntegerTy() const { return false; }
+    virtual bool isLocationTy() const { return false; }
+    virtual std::unique_ptr<TypeNode> clone() const = 0; // Add pure virtual clone method
 };
 
 // --- Full Class Definition for TypeName ---
@@ -894,6 +899,8 @@ public:
     void accept(Visitor& visitor) override;
 
     Category getCategory() const override { return Category::IDENTIFIER; } // TypeName is an identifier type
+    bool isIntegerTy() const override; // Override
+    std::unique_ptr<TypeNode> clone() const override; // Override clone
 };
 // --- End of TypeName Definition ---
 
@@ -908,6 +915,8 @@ public:
     void accept(Visitor& visitor) override;
 
     Category getCategory() const override { return Category::POINTER; }
+    bool isLocationTy() const override { return true; } // Override
+    std::unique_ptr<TypeNode> clone() const override; // Override clone
 };
 // --- End of PointerType Definition ---
 
@@ -923,6 +932,7 @@ public:
     void accept(Visitor& visitor) override;
 
     Category getCategory() const override { return Category::ARRAY; }
+    std::unique_ptr<TypeNode> clone() const override; // Override clone
 };
 // --- End of ArrayType Definition ---
 
@@ -938,6 +948,7 @@ public:
     void accept(Visitor& visitor) override;
 
     Category getCategory() const override { return Category::FUNCTION; }
+    std::unique_ptr<TypeNode> clone() const override; // Override clone
 };
 // --- End of FunctionType Definition ---
 
@@ -952,6 +963,7 @@ public:
     void accept(Visitor& visitor) override;
 
     Category getCategory() const override { return Category::OPTIONAL; }
+    std::unique_ptr<TypeNode> clone() const override; // Override clone
 };
 // --- End of OptionalType Definition ---
 
@@ -965,6 +977,7 @@ public:
     std::string toString() const override;
     void accept(Visitor& visitor) override;
     Category getCategory() const override { return Category::TUPLE; }
+    std::unique_ptr<TypeNode> clone() const override; // Override clone
 };
 // --- End of TupleTypeNode Definition --- // ADDED
 
@@ -1121,6 +1134,35 @@ public:
     void accept(Visitor& visitor) override;
 };
 
+// Add StructType class
+class StructType : public TypeNode {
+public:
+    struct Field {
+        std::string name;
+        std::shared_ptr<TypeNode> type;
+    };
+    std::vector<Field> fields;
+
+    StructType(const SourceLocation& loc_) : TypeNode(loc_) {}
+    
+    void accept(Visitor& visitor) override {
+        visitor.visit(this);
+    }
+
+    std::string toString() const override {
+        std::string result = "struct { ";
+        for (size_t i = 0; i < fields.size(); ++i) {
+            if (i > 0) result += ", ";
+            result += fields[i].name + ": " + fields[i].type->toString();
+        }
+        result += " }";
+        return result;
+    }
+
+    Category getCategory() const override {
+        return Category::STRUCT;
+    }
+};
 
 } // namespace ast
 } // namespace vyn

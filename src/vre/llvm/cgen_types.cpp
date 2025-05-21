@@ -1,4 +1,3 @@
-\
 #include "vyn/vre/llvm/codegen.hpp"
 #include "vyn/parser/ast.hpp"
 
@@ -17,24 +16,41 @@ using namespace vyn;
 // --- Type Mapping Helper ---
 llvm::Type* LLVMCodegen::codegenType(vyn::ast::TypeNode* typeNode) {
     if (!typeNode) {
-        // Consider adding a logError call here if a SourceLocation is available or a default one can be used.
-        // logError(SourceLocation(), "codegenType called with null typeNode.");
+        logError(SourceLocation(), "Null type node in codegenType");
         return nullptr;
     }
 
     // Check cache first
-    auto cacheIt = m_typeCache.find(typeNode);
-    if (cacheIt != m_typeCache.end()) {
-        return cacheIt->second;
+    auto it = m_typeCache.find(typeNode);
+    if (it != m_typeCache.end()) {
+        return it->second;
     }
 
     llvm::Type* llvmType = nullptr;
-    vyn::ast::TypeNode::Category category = typeNode->getCategory(); // Use getCategory()
 
-    // Handle different type categories
-    switch (category) { // Use getCategory()
+    switch (typeNode->getCategory()) {
         case vyn::ast::TypeNode::Category::IDENTIFIER: {
             auto* typeNameNode = dynamic_cast<vyn::ast::TypeName*>(typeNode);
+            if (!typeNameNode) {
+                logError(typeNode->loc, "Type node is not a TypeName");
+                return nullptr;
+            }
+
+            // Special handling for loc<T>
+            if (typeNameNode->identifier->name == "loc") {
+                if (typeNameNode->genericArgs.empty()) {
+                    logError(typeNode->loc, "loc type requires a type parameter");
+                    return nullptr;
+                }
+                llvm::Type* pointeeType = codegenType(typeNameNode->genericArgs[0].get());
+                if (!pointeeType) {
+                    logError(typeNode->loc, "Could not determine LLVM type for loc<T> pointee type");
+                    return nullptr;
+                }
+                llvmType = llvm::PointerType::getUnqual(pointeeType);
+                break;
+            }
+
             if (!typeNameNode || !typeNameNode->identifier) { // Check typeNameNode and its identifier
                 logError(typeNode->loc, "Type identifier node has no name or is not a TypeName.");
                 return nullptr;
@@ -148,13 +164,13 @@ llvm::Type* LLVMCodegen::codegenType(vyn::ast::TypeNode* typeNode) {
             llvmType = llvm::FunctionType::get(returnLlvmType, paramLlvmTypes, false)->getPointerTo();
             break;
         }
-        case vyn::ast::TypeNode::Category::POINTER: { // Changed from OWNERSHIP_WRAPPED, assuming this is the new equivalent
+        case vyn::ast::TypeNode::Category::POINTER: {
             auto* pointerTypeNode = dynamic_cast<vyn::ast::PointerType*>(typeNode);
-            if (!pointerTypeNode || !pointerTypeNode->pointeeType) { // Check pointerTypeNode and its pointeeType
+            if (!pointerTypeNode || !pointerTypeNode->pointeeType) {
                 logError(typeNode->loc, "Pointer type has no pointee type or is not a PointerType.");
                 return nullptr;
             }
-            llvm::Type* pointeeLlvmType = codegenType(pointerTypeNode->pointeeType.get()); // Access pointeeType
+            llvm::Type* pointeeLlvmType = codegenType(pointerTypeNode->pointeeType.get());
             if (!pointeeLlvmType) {
                 logError(typeNode->loc, "Could not determine LLVM type for pointee type in pointer.");
                 return nullptr;
@@ -213,3 +229,4 @@ void LLVMCodegen::visit(vyn::ast::TypeNode* node) {
     // This visitor primarily populates m_currentLLVMType.
     // It does not produce a Value for m_currentLLVMValue.
 }
+

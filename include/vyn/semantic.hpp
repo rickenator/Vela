@@ -93,13 +93,24 @@ struct SymbolInfo {
     Kind kind;
     std::string name;
     bool isConst = false;
-    ast::TypeNode* type = nullptr; // Changed to ast::TypeNode
-    // Extend as needed (scope, function params, etc)
+    ast::TypeNode* type = nullptr;
+};
+
+class Scope {
+public:
+    Scope(Scope* parent_scope = nullptr);
+    SymbolInfo* find(const std::string& name);
+    void insert(const std::string& name, SymbolInfo* symbol);
+    Scope* getParent();
+
+private:
+    std::unordered_map<std::string, SymbolInfo*> symbols;
+    Scope* parent;
 };
 
 class SymbolTable {
 public:
-    SymbolTable(SymbolTable* parent = nullptr) : parent(parent) {}
+    SymbolTable(SymbolTable* parent = nullptr) : parent(parent), isUnsafeBlock(false), isLoop(false) {}
     void add(const SymbolInfo& sym) { table[sym.name] = sym; }
     SymbolInfo* lookup(const std::string& name) {
         auto it = table.find(name);
@@ -107,6 +118,10 @@ public:
         if (parent) return parent->lookup(name);
         return nullptr;
     }
+    SymbolTable* getParent() { return parent; }
+    bool isUnsafeBlock;
+    bool isLoop;
+
 private:
     std::unordered_map<std::string, SymbolInfo> table;
     SymbolTable* parent;
@@ -115,8 +130,13 @@ private:
 class SemanticAnalyzer : public ast::Visitor {
 public:
     explicit SemanticAnalyzer(Driver& driver);
-    void analyze(ast::Module* root); // Qualified with ast::
+    void analyze(ast::Module* root);
     const std::vector<std::string>& getErrors() const { return errors; }
+
+    // Helper methods
+    bool isInLoop();
+    bool isInUnsafeBlock();
+    bool isIntegerType(ast::TypeNode* type);
 
     // Statements
     void visit(ast::BlockStatement* node) override;
@@ -127,7 +147,7 @@ public:
     void visit(ast::ReturnStatement* node) override;
     void visit(ast::BreakStatement* node) override;
     void visit(ast::ContinueStatement* node) override;
-    void visit(ast::TryStatement* node) override; // Changed from TryCatchStatement
+    void visit(ast::TryStatement* node) override;
     void visit(ast::UnsafeStatement* node) override;
     void visit(ast::EmptyStatement* node) override;
     void visit(ast::AssertStatement* node) override;
@@ -145,11 +165,11 @@ public:
     void visit(ast::MemberExpression* node) override;
     void visit(ast::AssignmentExpression* node) override;
     void visit(ast::LogicalExpression* node) override;
-    void visit(ast::ConditionalExpression* node) override; // Ternary
-    void visit(ast::SequenceExpression* node) override; // Comma operator
+    void visit(ast::ConditionalExpression* node) override;
+    void visit(ast::SequenceExpression* node) override;
     void visit(ast::ObjectLiteral* node) override;
     void visit(ast::ArrayLiteral* node) override;
-    void visit(ast::FunctionExpression* node) override; // Lambda / anonymous function
+    void visit(ast::FunctionExpression* node) override;
     void visit(ast::StringLiteral* node) override;
     void visit(ast::FloatLiteral* node) override;
     void visit(ast::BooleanLiteral* node) override;
@@ -168,7 +188,7 @@ public:
     void visit(ast::VariableDeclaration* node) override;
     void visit(ast::FunctionDeclaration* node) override;
     void visit(ast::TypeAliasDeclaration* node) override;
-    void visit(ast::ImportDeclaration* node) override; // Changed from ImportStatement
+    void visit(ast::ImportDeclaration* node) override;
     void visit(ast::StructDeclaration* node) override;
     void visit(ast::ClassDeclaration* node) override;
     void visit(ast::EnumDeclaration* node) override;
@@ -176,7 +196,7 @@ public:
     void visit(ast::ImplDeclaration* node) override;
     void visit(ast::NamespaceDeclaration* node) override;
 
-    // Types (if visited)
+    // Types
     void visit(ast::TypeName* node) override;
     void visit(ast::PointerType* node) override;
     void visit(ast::ArrayType* node) override;
@@ -185,39 +205,17 @@ public:
     void visit(ast::GenericParameter* node) override;
 
 private:
-    Driver& driver_; // Add this line
-    void analyzeNode(ast::Node* node); // Qualified with ast::
-    void analyzeAssignment(ast::AssignmentExpression* expr); // Qualified with ast::
-    void analyzeVariableDeclaration(ast::VariableDeclaration* decl); // Qualified with ast::
-    void analyzeUnaryExpression(ast::UnaryExpression* expr); // Qualified with ast::
-    void analyzeBorrowExpression(ast::BorrowExpression* expr); // Qualified with ast::
-    void analyzeBlockStatement(ast::BlockStatement* block); // Qualified with ast::
-    // Add other specific analyze methods if they exist and need qualification
-    // void analyzeFunctionDeclaration(ast::FunctionDeclaration* decl);
-    // void analyzeReturnStatement(ast::ReturnStatement* stmt);
-    // void analyzeIfStatement(ast::IfStatement* stmt);
-    // void analyzeWhileStatement(ast::WhileStatement* stmt);
-    // void analyzeExpressionStatement(ast::ExpressionStatement* stmt);
-    // void analyzeBinaryExpression(ast::BinaryExpression* expr);
-    // void analyzeCallExpression(ast::CallExpression* expr);
-    // void analyzeMemberAccessExpression(ast::MemberAccessExpression* expr);
-    // void analyzeIndexAccessExpression(ast::IndexAccessExpression* expr);
-    // void analyzeLiteral(ast::Literal* lit);
-    // void analyzeIdentifier(ast::Identifier* id);
-    // void analyzeTypeNode(ast::TypeNode* typeNode); // If it exists
-
+    Driver& driver_;
     SymbolTable* currentScope;
     std::vector<std::string> errors;
-    std::unordered_map<ast::Node*, ast::TypeNode*> expressionTypes; // Store inferred types
+    std::unordered_map<ast::Node*, ast::TypeNode*> expressionTypes;
+    std::vector<SymbolTable*> scopes;
 
-    ast::TypeNode* typeCheck(ast::Node* node); // Helper for type checking, returns type or nullptr
     void enterScope();
     void exitScope();
-    void addError(const std::string& message, const ast::Node* node); // Use ast::Node for location
+    void addError(const std::string& message, const ast::Node* node);
     bool isLValue(ast::Expression* expr);
-    bool isRawLocationType(ast::Expression* expr); // Qualified with ast::
-
-    bool in_unsafe_block_ = false;
+    bool isRawLocationType(ast::Expression* expr);
 };
 
 } // namespace vyn

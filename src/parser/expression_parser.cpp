@@ -37,46 +37,22 @@ namespace vyn {
     // Parses assignment expressions (e.g., x = 10, y += 5)
     vyn::ast::ExprPtr ExpressionParser::parse_assignment_expr() {
         vyn::ast::ExprPtr left = parse_logical_or_expr(); // Precedence: logical OR is higher than assignment
-
-        if (match(TokenType::EQ) || match(TokenType::PLUSEQ) || match(TokenType::MINUSEQ) ||
-            match(TokenType::MULTIPLYEQ) || match(TokenType::DIVEQ) || match(TokenType::MODEQ) ||
-            match(TokenType::LSHIFTEQ) || match(TokenType::RSHIFTEQ) ||
-            match(TokenType::BITWISEANDEQ) || match(TokenType::BITWISEOREQ) || match(TokenType::BITWISEXOREQ) ||
-            match(TokenType::COLONEQ)) { // Added COLONEQ for completeness, though its semantics might differ
-            
-            token::Token op_token = previous_token();
-            SourceLocation op_loc = op_token.location; // Location of the operator
-
-            // Check if left is a valid LValue (identifier, member access, array element, pointer deref)
-            bool is_valid_lvalue = false;
-            if (dynamic_cast<ast::Identifier*>(left.get())) {
-                is_valid_lvalue = true;
-            } else if (auto member_expr = dynamic_cast<ast::MemberExpression*>(left.get())) {
-                is_valid_lvalue = true;
-            } else if (auto array_elem_expr = dynamic_cast<ast::ArrayElementExpression*>(left.get())) {
-                is_valid_lvalue = true;
-            } else if (dynamic_cast<ast::PointerDerefExpression*>(left.get())) {
-                // Pointer dereference assignment (at(ptr))
-                is_valid_lvalue = true;
-            }
-            // TODO: Consider adding ast::ArrayElementExpression here if not handled elsewhere - It is handled above.
-
-            if (is_valid_lvalue) {
-                vyn::ast::ExprPtr right = parse_expression(); // Parse the right-hand side
-                return std::make_unique<ast::AssignmentExpression>(op_loc, std::move(left), op_token, std::move(right));
-            } else {
-                std::string expr_type_str = "unknown expression type";
-                if (left) {
-                    if (dynamic_cast<ast::Identifier*>(left.get())) expr_type_str = "identifier";
-                    else if (dynamic_cast<ast::MemberExpression*>(left.get())) expr_type_str = "member expression";
-                    else if (dynamic_cast<ast::ArrayElementExpression*>(left.get())) expr_type_str = "array element expression";
-                    else if (dynamic_cast<ast::CallExpression*>(left.get())) expr_type_str = "call expression";
-                    // Add other expression types if needed for better error messages
-                }
-                throw error(op_token, "Invalid left-hand side (" + expr_type_str + ") in assignment expression");
-            }
+         
+        // Check for assignment operators
+        std::optional<token::Token> op;
+        if ((op = match(TokenType::EQ)) || (op = match(TokenType::PLUSEQ)) || (op = match(TokenType::MINUSEQ)) ||
+            (op = match(TokenType::MULTIPLYEQ)) || (op = match(TokenType::DIVEQ)) || (op = match(TokenType::MODEQ)) ||
+            (op = match(TokenType::LSHIFTEQ)) || (op = match(TokenType::RSHIFTEQ)) ||
+            (op = match(TokenType::BITWISEANDEQ)) || (op = match(TokenType::BITWISEOREQ)) || (op = match(TokenType::BITWISEXOREQ)) ||
+            (op = match(TokenType::COLONEQ))) {
+            // Build assignment node using the operator token
+            token::Token op_token = op.value();
+            SourceLocation op_loc = op_token.location;
+            // Parse RHS
+            vyn::ast::ExprPtr right = parse_expression();
+            return std::make_unique<ast::AssignmentExpression>(op_loc, std::move(left), op_token, std::move(right));
         }
-        return left; // Not an assignment, just return the parsed left expression
+        return left; // Not an assignment
     }
 
     vyn::ast::ExprPtr ExpressionParser::parse_call_expression(vyn::ast::ExprPtr callee_expr) {
@@ -107,13 +83,13 @@ namespace vyn {
     vyn::ast::ExprPtr ExpressionParser::parse_primary() {
         DEBUG_PRINT("Entering parse_primary");
         DEBUG_TOKEN(peek());
-        SourceLocation loc = peek().location;
+        SourceLocation loc = peek().location; // General location, might be overridden
 
         // Handle if statements as expressions (e.g. `let x = if cond { 1 } else { 0 }`)
         if (match(TokenType::KEYWORD_IF)) {
-            expect(TokenType::LPAREN); // Expect \'(\' after \'if\'
+            expect(TokenType::LPAREN); // Expect \\\'(\\\' after \\\'if\\\'
             vyn::ast::ExprPtr condition = parse_expression(); // Condition
-            expect(TokenType::RPAREN); // Expect \')\' after condition
+            expect(TokenType::RPAREN); // Expect \\\')\\\' after condition
 
             expect(TokenType::LBRACE); // Then block
             vyn::ast::ExprPtr then_branch = parse_expression(); // Expression inside then block
@@ -125,10 +101,7 @@ namespace vyn {
                 else_branch = parse_expression(); // Expression inside else block
                 expect(TokenType::RBRACE);
             } else {
-                // In Vyn, if-expressions might require an else branch.
-                // If not, the type system would need to handle it (e.g. Option type or similar)
-                // For now, let's make else mandatory for if-expressions.
-                throw error(peek(), "Expected 'else' branch for if-expression.");
+                throw error(peek(), "Expected \'else\' branch for if-expression.");
             }
             return std::make_unique<ast::IfExpression>(loc, std::move(condition), std::move(then_branch), std::move(else_branch));
         }
@@ -136,15 +109,15 @@ namespace vyn {
         // Try to parse TypeName(arguments) - Constructor Call
         // This requires being able to parse a TypeNode first.
         // We need a TypeParser instance here.
-        // For now, we\'ll assume TypeParser is part of `this` parser or can be created.
+        // For now, we\\\'ll assume TypeParser is part of `this` parser or can be created.
         // This is a lookahead and backtrack mechanism.
         size_t initial_pos = pos_;
         try {
             TypeParser type_parser(tokens_, pos_, current_file_path_, *this); // Pass *this for ExpressionParser reference
             ast::TypeNodePtr type_node = type_parser.parse(); // Call parse() instead of parse_type_annotation()
             
-            if (type_node && match(TokenType::LPAREN)) { // Successfully parsed a type and found \'(\'
-                // It's a ConstructionExpression
+            if (type_node && match(TokenType::LPAREN)) { // Successfully parsed a type and found \\\'(\\\'
+                // It\'s a ConstructionExpression
                 std::vector<vyn::ast::ExprPtr> arguments;
                 SourceLocation call_loc = previous_token().location; 
                 if (!match(TokenType::RPAREN)) { 
@@ -153,20 +126,17 @@ namespace vyn {
                     } while (match(TokenType::COMMA));
                     expect(TokenType::RPAREN);
                 }
-                // The location for ConstructionExpression should ideally span from type to ')'
-                // For now, using call_loc (location of LPAREN) is a simplification.
-                // A better loc would be type_node->loc combined with the RPAREN location.
                 return std::make_unique<ast::ConstructionExpression>(type_node->loc, std::move(type_node), std::move(arguments));
             } else {
                 // Not a TypeName(...), backtrack
                 pos_ = initial_pos;
             }
         } catch (const std::runtime_error& e) {
-            // Parsing type failed, or not followed by \'(\', backtrack
+            // Parsing type failed, or not followed by \\\'(\\\', backtrack
             pos_ = initial_pos;
             // Log or handle error if needed, or just proceed to other parsing rules
         }
-        // If it wasn\'t a TypeName(...), reset pos_ and try other primary expression forms.
+        // If it wasn\\\'t a TypeName(...), reset pos_ and try other primary expression forms.
         // Ensure pos_ is correctly managed by TypeParser or reset it manually.
         // The TypeParser must not consume tokens if it fails to parse a complete type for this to work well.
 
@@ -244,8 +214,40 @@ namespace vyn {
         }
 
 regular_array_literal:
-        // Typed Struct Literal: Identifier { ... }
+        // Handle 'from<Type>(expr)' syntax, Typed Struct Literals, and Plain Identifiers
         if (peek().type == TokenType::IDENTIFIER) {
+            token::Token current_id_token = peek(); // Peek, don't consume yet
+
+            if (current_id_token.lexeme == "from") {
+                // Potential from<Type>(expr)
+                // Lookahead: from < Type > ( expr )
+                // Check for '<' after 'from'
+                if (pos_ + 1 < tokens_.size() && tokens_[pos_ + 1].type == TokenType::LT) { // Changed LESS_THAN to LT
+                    consume(); // Consume 'from'
+                    SourceLocation from_loc = current_id_token.location;
+
+                    expect(TokenType::LT); // Changed LESS_THAN to LT, Consume '<'
+
+                    TypeParser type_parser(tokens_, pos_, current_file_path_, *this);
+                    ast::TypeNodePtr target_type = type_parser.parse();
+                    if (!target_type) {
+                        throw error(peek(), "Expected type specification after 'from<'.");
+                    }
+
+                    expect(TokenType::GT); // Changed GREATER_THAN to GT, Consume '>'
+                    expect(TokenType::LPAREN);      // Consume '('
+
+                    vyn::ast::ExprPtr address_expr = parse_expression();
+
+                    expect(TokenType::RPAREN);      // Consume ')'
+
+                    return std::make_unique<ast::FromIntToLocExpression>(from_loc, std::move(address_expr), std::move(target_type));
+                }
+                // If "from" is not followed by "<", it will be treated like any other identifier below
+                // (either as a typed struct name like "from { ... }" or a plain variable "from").
+            }
+
+            // Typed Struct Literal: Identifier { ... } or Plain Identifier
             bool is_typed_struct = false;
             // Check if the next token after IDENTIFIER is LBRACE
             if (pos_ + 1 < tokens_.size() && tokens_[pos_ + 1].type == TokenType::LBRACE) {
@@ -255,15 +257,15 @@ regular_array_literal:
             if (is_typed_struct) {
                 token::Token type_name_token = consume(); // Consume IDENTIFIER
                 auto type_identifier_node = std::make_unique<ast::Identifier>(type_name_token.location, type_name_token.lexeme);
-                // Create a TypeNode for the type path. For simplicity, assuming it's a simple identifier type without generics for now.
-                // This might need to become a more complex type parsing if struct literals can have generic types like MyStruct<T>{...}
                 auto type_path_node = std::make_unique<ast::TypeName>(type_name_token.location, std::move(type_identifier_node));
 
                 expect(TokenType::LBRACE); // Consumes LBRACE
-                SourceLocation struct_loc = type_name_token.location; // Location of the typed struct literal starts with the type name
+                // Use type_name_token.location for the ObjectLiteral if it represents the start of the typed literal.
+                // The 'loc' variable from the start of parse_primary() might be too broad if other constructs were peeked at.
+                SourceLocation struct_loc = type_name_token.location; 
 
                 std::vector<ast::ObjectProperty> properties;
-                if (!check(TokenType::RBRACE)) { // If not an empty struct {} or MyType{}
+                if (!check(TokenType::RBRACE)) { 
                     while (true) {
                         if (peek().type != TokenType::IDENTIFIER) {
                             throw error(peek(), "Expected identifier for struct field name.");
@@ -274,27 +276,23 @@ regular_array_literal:
                         vyn::ast::ExprPtr value = nullptr;
                         if (match(TokenType::COLON) || match(TokenType::EQ)) {
                             if (check(TokenType::COMMA) || check(TokenType::RBRACE)) {
-                                throw error(peek(), "Expected expression for struct field value after ':' or '='.");
+                                throw error(peek(), "Expected expression for struct field value after \':\' or \'=\'.");
                             }
                             value = parse_expression();
                         } else {
-                            // Shorthand: { fieldName }. AST.md: value is optional (null).
-                            // If ast::ObjectProperty requires an actual expression for shorthand (e.g., an Identifier node),
-                            // this would be: value = std::make_unique<ast::Identifier>(key_token.location, key_token.lexeme);
-                            // Assuming nullptr is acceptable for the value in ast::ObjectProperty for shorthand.
+                            // Shorthand: { fieldName }
                         }
                         properties.emplace_back(key_token.location, std::move(key_identifier), std::move(value));
 
                         if (match(TokenType::COMMA)) {
-                            if (check(TokenType::RBRACE)) { // Trailing comma: { a:1, } or MyType{ a:1, }
+                            if (check(TokenType::RBRACE)) { 
                                 break;
                             }
-                            // Comma consumed, expect another property. If next is not IDENTIFIER, it's an error.
                             if (peek().type != TokenType::IDENTIFIER) {
                                 throw error(peek(), "Expected identifier for struct field name after comma.");
                             }
                         } else {
-                            break; // No comma, last property
+                            break; 
                         }
                     }
                 }
@@ -302,7 +300,7 @@ regular_array_literal:
                 return std::make_unique<ast::ObjectLiteral>(struct_loc, std::move(type_path_node), std::move(properties));
             } else {
                 // Plain Identifier
-                token::Token id_token = consume();
+                token::Token id_token = consume(); // Consume IDENTIFIER (this was current_id_token if not "from<...")
                 return std::make_unique<ast::Identifier>(id_token.location, id_token.lexeme);
             }
         }
@@ -341,20 +339,41 @@ regular_array_literal:
                 return std::make_unique<ast::ArrayLiteral>(array_loc, std::vector<vyn::ast::ExprPtr>{});
             }
 
+            // --- Lookahead to detect list comprehension by scanning tokens ---
+            size_t snapshot_pos = pos_;
+            bool will_comprehension = false;
+            {
+                size_t scan_pos = snapshot_pos;
+                int bracket_nest = 1; // starting after consuming '['
+                while (scan_pos < tokens_.size()) {
+                    const auto& tk = tokens_[scan_pos];
+                    if (tk.type == TokenType::LBRACKET) {
+                        bracket_nest++;
+                    } else if (tk.type == TokenType::RBRACKET) {
+                        bracket_nest--;
+                        if (bracket_nest == 0) break;
+                    } else if (bracket_nest == 1 && tk.type == TokenType::KEYWORD_FOR) {
+                        will_comprehension = true;
+                        break;
+                    }
+                    scan_pos++;
+                }
+            }
+            pos_ = snapshot_pos;
+
+            // --- Actual parsing of first expression ---
             DEBUG_PRINT("parse_primary: Before parsing first_expr in array/list. Current token:");
             DEBUG_TOKEN(peek());
-            // Use a specific precedence level if needed, e.g., parse_assignment_expr() to allow full expressions,
-            // or parse_relational_expr() if elements are more constrained.
-            // For `x*x for ...` and `0..10`, `parse_expression` (which calls `parse_assignment_expr`) is appropriate.
             vyn::ast::ExprPtr first_expr = parse_expression(); 
-                                                                
             DEBUG_PRINT("parse_primary: After parsing first_expr in array/list. Current token:");
             DEBUG_TOKEN(peek());
-            
-            // After parsing the potential element expression, check for list comprehension
-            if (match(TokenType::KEYWORD_FOR)) { 
+
+            // List comprehension if lookahead or actual FOR match
+            if (will_comprehension || check(TokenType::KEYWORD_FOR)) {
+                // Consume the 'for' keyword
+                token::Token for_token = consume();
                 DEBUG_PRINT("parse_primary: Matched KEYWORD_FOR, parsing list comprehension.");
-                DEBUG_TOKEN(previous_token()); // The FOR token
+                DEBUG_TOKEN(for_token); // The FOR token
 
                 if (!check(TokenType::IDENTIFIER)) {
                     throw error(peek(), "Expected identifier after 'for' in list comprehension.");
@@ -401,7 +420,6 @@ regular_array_literal:
                 while (match(TokenType::COMMA)) {
                     DEBUG_PRINT("parse_primary: Matched COMMA in array literal.");
                     DEBUG_TOKEN(previous_token()); // The COMMA token
-                    // Check for trailing comma: [elem1, ]
                     if (check(TokenType::RBRACKET)) { 
                         DEBUG_PRINT("parse_primary: Trailing comma detected in array literal.");
                         break; 
@@ -668,209 +686,127 @@ regular_array_literal:
         return parse_postfix_expr();
     }
 
+    // Helper to parse postfix operations like calls, member access, subscripting
     vyn::ast::ExprPtr ExpressionParser::parse_postfix_expr() {
         DEBUG_PRINT("Entering parse_postfix_expr");
         DEBUG_TOKEN(peek());
-        vyn::ast::ExprPtr expr = parse_primary(); 
-        DEBUG_PRINT("parse_postfix_expr: After parse_primary. Current token:");
+        vyn::ast::ExprPtr expr = parse_primary();
+        DEBUG_PRINT("After parse_primary in parse_postfix_expr");
+        if(expr) { DEBUG_PRINT("Primary expr parsed successfully."); } else { DEBUG_PRINT("Primary expr is null."); }
         DEBUG_TOKEN(peek());
 
         while (true) {
+            SourceLocation op_loc = peek().location; // Location of the operator (. [ ()
             if (match(TokenType::LPAREN)) {
                 DEBUG_PRINT("parse_postfix_expr: Matched LPAREN for call.");
-                DEBUG_TOKEN(previous_token());
-                // Parse call and convert special pointer-related calls to AST nodes
-                auto calleeAstNode = std::move(expr); // This is the AST node for the thing being called
-                auto parsedExprAfterCall = parse_call_expression(std::move(calleeAstNode)); // Returns unique_ptr<ast::Expression>
+                // Check if \'expr\' is an identifier for an intrinsic function
+                // This check needs to be robust. For example, ensure \'expr\' is indeed an Identifier.
+                if (expr->getType() == ast::NodeType::IDENTIFIER) {
+                    auto id = static_cast<ast::Identifier*>(expr.get());
+                    std::string name = id->name;
 
-                ast::CallExpression* actualCallExpr = dynamic_cast<ast::CallExpression*>(parsedExprAfterCall.get());
-
-                if (actualCallExpr) {
-                    // It is a call expression, now check if it's one of our special intrinsics
-                    ast::Identifier* calleeIdent = dynamic_cast<ast::Identifier*>(actualCallExpr->callee.get());
-                    if (calleeIdent) {
-                        const std::string& name = calleeIdent->name;
-                        if ((name == "at" || name == "loc" || name == "addr" || name == "from")) {
-                            if (actualCallExpr->arguments.size() == 1) {
-                                // Special intrinsic with correct number of arguments.
-                                // Move the argument out of the CallExpression's argument list.
-                                auto arg = std::move(actualCallExpr->arguments[0]);
-                                // Clear the arguments vector in the original CallExpression node
-                                // as its content has been moved.
-                                actualCallExpr->arguments.clear(); 
-
-                                if (name == "at") {
-                                    expr = std::make_unique<ast::PointerDerefExpression>(actualCallExpr->loc, std::move(arg));
-                                } else if (name == "loc") {
-                                    expr = std::make_unique<ast::LocationExpression>(actualCallExpr->loc, std::move(arg));
-                                } else if (name == "addr") {
-                                    expr = std::make_unique<ast::AddrOfExpression>(actualCallExpr->loc, std::move(arg));
-                                } else if (name == "from") {
-                                    expr = std::make_unique<ast::FromIntToLocExpression>(actualCallExpr->loc, std::move(arg));
-                                }
-                                // The unique_ptr parsedExprAfterCall (pointing to the original CallExpression)
-                                // will go out of scope and the CallExpression AST node will be deleted if not moved,
-                                // which is correct as we've created a new specialized AST node that replaces it.
-                            } else {
-                                // Special intrinsic name, but wrong number of arguments. Treat as a regular call.
-                                expr = std::move(parsedExprAfterCall);
-                            }
-                        } else {
-                            // Not a special intrinsic name. Treat as a regular call.
-                            expr = std::move(parsedExprAfterCall);
+                    // Handle intrinsic-like calls: loc(var), addr(loc_var), from(addr_val), at(loc_var)
+                    // These are parsed as regular calls but might have special handling in semantic analysis / codegen.
+                    // For now, the parser treats them as CallExpressions.
+                    // Argument count checks could be here or in semantic analysis.
+                    // Example of an early check (could be too strict or misplaced for a generic parser):
+                    if (name == "loc" || name == "addr" || name == "from" || name == "at") {
+                         // This is a simplified intrinsic check. Real intrinsics might need more context.
+                        std::vector<vyn::ast::ExprPtr> arguments;
+                        if (!check(TokenType::RPAREN)) { // If there are arguments
+                            arguments.push_back(parse_expression()); // Assuming intrinsics take one argument
+                            // Add loop for multiple arguments if intrinsics can take more:
+                            // while (match(TokenType::COMMA)) {
+                            //     arguments.push_back(parse_expression());
+                            // }
                         }
-                    } else {
-                        // Callee is not an identifier. Treat as a regular call.
-                        expr = std::move(parsedExprAfterCall);
+                        expect(TokenType::RPAREN);
+                        
+                        // Argument count validation (example)
+                        size_t expected_arg_count = 1; // Most of these take 1 arg
+                        if (arguments.size() != expected_arg_count) {
+                            // Create a token for error reporting based on the intrinsic\'s identifier
+                            vyn::token::Token intrinsic_token(vyn::TokenType::IDENTIFIER, name, id->loc);
+                            throw error(intrinsic_token, "Intrinsic \'" + name + "\' expects " + std::to_string(expected_arg_count) + " argument(s), got " + std::to_string(arguments.size()) + ".");
+                        }
+                        // Create CallExpression for the intrinsic
+                        expr = std::make_unique<ast::CallExpression>(op_loc, std::move(expr), std::move(arguments));
+                        continue; // Continue to see if there are more postfix operations
                     }
-                } else {
-                    // parsedExprAfterCall was not a CallExpression (e.g., nullptr or some other Expression type).
-                    // This case should ideally not be reached if parse_call_expression guarantees a CallExpression
-                    // or throws on error. Assign it to expr to preserve the parsed node.
-                    expr = std::move(parsedExprAfterCall);
                 }
-                DEBUG_PRINT("parse_postfix_expr: After processing call. Current token:");
-                DEBUG_TOKEN(peek());
+                // If not an intrinsic or not an identifier, parse as a regular call expression
+                expr = parse_call_expression(std::move(expr)); // parse_call_expression expects callee and handles args
             } else if (match(TokenType::DOT)) {
                 DEBUG_PRINT("parse_postfix_expr: Matched DOT for member access.");
                 DEBUG_TOKEN(previous_token());
                 expr = parse_member_access(std::move(expr));
                 DEBUG_PRINT("parse_postfix_expr: After parse_member_access. Current token:");
                 DEBUG_TOKEN(peek());
-            } else if (match(TokenType::LBRACKET)) {
-                DEBUG_PRINT("parse_postfix_expr: Matched LBRACKET for index access.");
-                DEBUG_TOKEN(previous_token());
-                SourceLocation bracket_loc = previous_token().location;
-                DEBUG_PRINT("parse_postfix_expr: Before parsing index_expr. Current token:");
-                DEBUG_TOKEN(peek());
-                vyn::ast::ExprPtr index_expr = parse_expression();
-                DEBUG_PRINT("parse_postfix_expr: After parsing index_expr. Current token:");
-                DEBUG_TOKEN(peek());
-                expect(TokenType::RBRACKET);
-                DEBUG_PRINT("parse_postfix_expr: Consumed RBRACKET for index access.");
-                DEBUG_TOKEN(previous_token());
-                expr = std::make_unique<ast::ArrayElementExpression>(bracket_loc, std::move(expr), std::move(index_expr));
-            } else if (peek().type == TokenType::LT) { // Potential generic instantiation
-                DEBUG_PRINT("parse_postfix_expr: Found LT, potential generic instantiation. Current token:");
-                DEBUG_TOKEN(peek());
-
-                size_t snapshot_before_lt = pos_;
-                token::Token lt_token = peek(); // For location, don't consume yet
-
-                // Avoid conflict with << (LSHIFT) by checking next token if current is LT
-                // This specific check might be better placed or refined,
-                // e.g. by ensuring it's not part of a binary expression being parsed by a lower precedence parser.
-                // For now, a simple check: if LT is followed by LT, it's likely LSHIFT.
-                bool is_likely_shift = false;
-                if (pos_ + 1 < tokens_.size() && tokens_[pos_ + 1].type == TokenType::LT) {
-                    is_likely_shift = true;
-                }
-                // Also, relational operators are lower precedence. If this postfix parse fails,
-                // the LT might be picked up by parse_relational_expr.
-
-                if (!is_likely_shift) {
-                    consume(); // Consume LT
-
-                    std::vector<ast::TypeNodePtr> generic_arguments;
-                    bool parsed_args_successfully = true;
-                    
-                    // Temporarily create a TypeParser for parsing arguments
-                    // Note: ExpressionParser is passed to TypeParser constructor.
-                    TypeParser arg_parser(tokens_, pos_, current_file_path_, *this);
-
-                    if (peek().type != TokenType::GT) { // Not empty <>
-                        while (true) {
-                            size_t snapshot_before_arg = pos_;
-                            try {
-                                ast::TypeNodePtr arg = arg_parser.parse();
-                                if (!arg) { // Should ideally not happen if TypeParser throws
-                                    parsed_args_successfully = false;
-                                    pos_ = snapshot_before_arg; // backtrack this arg attempt
-                                    break;
-                                }
-                                generic_arguments.push_back(std::move(arg));
-                            } catch (const std::runtime_error& e) {
-                                pos_ = snapshot_before_arg; // Backtrack this arg attempt
-                                parsed_args_successfully = false;
-                                break;
-                            }
-
-                            if (match(TokenType::COMMA)) {
-                                if (peek().type == TokenType::GT) { // Trailing comma like <T,> is invalid
-                                    parsed_args_successfully = false;
-                                    break;
-                                }
-                                // continue to next argument
-                            } else {
-                                break; // No comma, expect GT or failure
-                            }
-                        }
-                    }
-
-                    if (parsed_args_successfully && match(TokenType::GT)) {
-                        // Successfully parsed expr<args>
-                        expr = std::make_unique<ast::GenericInstantiationExpression>(
-                            expr->loc, // loc of the base expression 'a'
-                            std::move(expr),
-                            std::move(generic_arguments),
-                            lt_token.location,        // loc of '<'
-                            previous_token().location // loc of '>'
-                        );
-                        // Successfully parsed generic instantiation, continue postfix loop
-                        continue; 
-                    } else {
-                        // Failed to parse as expr<args> or expr<>
-                        // Backtrack: reset pos_ to before the LT was consumed
-                        pos_ = snapshot_before_lt;
-                        // Break from postfix loop, allowing LT to be tried by other rules (e.g., relational)
-                        break; 
-                    }
-                } else { // Was likely a shift or other construct, not generic LT for this postfix expression
-                    break;
-                }
-            } else {
-                DEBUG_PRINT("parse_postfix_expr: No more postfix operators.");
-                break;
-            }
-        }
-        DEBUG_PRINT("Exiting parse_postfix_expr. Current token:");
-        DEBUG_TOKEN(peek());
-        return expr;
-    }
-
-    // Helper to check if a token type is a literal
-    bool ExpressionParser::is_literal(TokenType type) const { // Added const
-        switch (type) {
-            case TokenType::INT_LITERAL:
-            case TokenType::FLOAT_LITERAL:
-            case TokenType::STRING_LITERAL:
-            // case TokenType::CHAR_LITERAL: // If you add char literals back
-            case TokenType::KEYWORD_TRUE:
-            case TokenType::KEYWORD_FALSE:
-            case TokenType::KEYWORD_NULL:
-            case TokenType::KEYWORD_NIL:
-                return true;
-            default:
-                return false;
+            } else if (match(TokenType::LBRACKET)) { // This LBRACKET is for array element access
+            token::Token bracket_token = previous_token(); // Location of \'[\'
+            auto index_expr = parse_expression();
+            expect(TokenType::RBRACKET);
+            expr = std::make_unique<ast::ArrayElementExpression>(bracket_token.location, std::move(expr), std::move(index_expr));
+        } else {
+            break; 
         }
     }
+    return expr; 
+}
 
-    bool ExpressionParser::is_expression_start(vyn::TokenType type) const {
-        // This is a basic check. You might need to expand this based on your grammar.
-        // For example, if expressions can start with keywords like 'new', 'await', etc.
-        // or specific operators for unary expressions.
-        return is_literal(type) ||
-               type == TokenType::IDENTIFIER || // Covers plain identifiers and typed struct literals like `MyType { ... }`
-               type == TokenType::LPAREN || // Grouped expression
-               type == TokenType::MINUS ||  // Unary minus
-               type == TokenType::BANG ||   // Unary not
-               type == TokenType::TILDE ||  // Unary bitwise not
-               type == TokenType::KEYWORD_AWAIT || // Added KEYWORD_AWAIT
-               type == TokenType::LBRACKET || // Array literal
-               type == TokenType::LBRACE ||   // Anonymous Struct literal { ... }
-               type == TokenType::KEYWORD_FN || // Function expression/lambda
-               type == TokenType::KEYWORD_IF; // If expression
-        // Removed KEYWORD_NEW as it\'s not in token.hpp and not a primary expression start per AST.md
+// Implementation for is_literal
+bool ExpressionParser::is_literal(TokenType type) const {
+    switch (type) {
+        case TokenType::INT_LITERAL:
+        case TokenType::FLOAT_LITERAL:
+        case TokenType::STRING_LITERAL:
+        case TokenType::KEYWORD_TRUE:
+        case TokenType::KEYWORD_FALSE:
+        case TokenType::KEYWORD_NULL:
+        case TokenType::KEYWORD_NIL:
+            return true;
+        default:
+            return false;
     }
+}
+
+// Implementation for is_expression_start
+// This function helps in determining if a token can start an expression.
+// It's used in contexts like parsing the body of a for loop or an if statement.
+bool ExpressionParser::is_expression_start(vyn::TokenType type) const {
+    // Primary expression starters
+    if (type == TokenType::IDENTIFIER ||
+        type == TokenType::INT_LITERAL ||
+        type == TokenType::FLOAT_LITERAL ||
+        type == TokenType::STRING_LITERAL ||
+        type == TokenType::KEYWORD_TRUE ||
+        type == TokenType::KEYWORD_FALSE ||
+        type == TokenType::KEYWORD_NULL ||
+        type == TokenType::KEYWORD_NIL ||
+        type == TokenType::LPAREN ||    // Grouped expression or tuple
+        type == TokenType::LBRACKET ||  // Array literal or list comprehension
+        type == TokenType::LBRACE ||    // Object literal
+        type == TokenType::KEYWORD_IF)  // If expression
+    {
+        return true;
+    }
+
+    // Unary operator starters
+    if (type == TokenType::BANG ||
+        type == TokenType::MINUS ||
+        type == TokenType::TILDE ||
+        type == TokenType::KEYWORD_AWAIT || // if await is an operator
+        type == TokenType::KEYWORD_VIEW)    // if view is an operator
+    {
+        return true;
+    }
+    
+    // Keywords that can start expressions (like \'from<T>(e)\' or constructor calls if types are keywords)
+    // This might overlap with IDENTIFIER if \'from\' is just an identifier.
+    // Add specific keywords if they are distinct token types and can start expressions.
+    // e.g. if \'new\' was a keyword for construction: case TokenType::KEYWORD_NEW: return true;
+
+    return false;
+}
 
 } // namespace vyn

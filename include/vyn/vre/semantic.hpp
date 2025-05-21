@@ -29,7 +29,7 @@ enum class SymbolType {
 struct Symbol {
     SymbolType type;
     std::string name;
-    ast::TypeNode* dataType; // Assuming TypeNode is the correct type for data types. Changed to ast::TypeNode
+    std::shared_ptr<ast::TypeNode> dataType; // Changed from ast::TypeNode* to shared_ptr
     bool isMutable;
     // Add other relevant symbol information, e.g., scope, definition location
 };

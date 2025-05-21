@@ -43,7 +43,7 @@ vyn::ast::DeclPtr DeclarationParser::parse() {
     } else if (current_token.type == vyn::TokenType::KEYWORD_IMPL) {
         auto impl_decl = this->parse_impl();
         return impl_decl;
-    } else if (current_token.type == vyn::TokenType::IDENTIFIER && current_token.lexeme == "class") { // KEYWORD_CLASS
+    } else if (current_token.type == vyn::TokenType::KEYWORD_CLASS) { // Changed this line
         auto class_decl = this->parse_class_declaration();
         return class_decl;
     } else if (current_token.type == vyn::TokenType::KEYWORD_ENUM) {
@@ -56,7 +56,7 @@ vyn::ast::DeclPtr DeclarationParser::parse() {
                current_token.type == vyn::TokenType::KEYWORD_CONST ||
                current_token.type == vyn::TokenType::KEYWORD_VAR) { // Accept var
         return this->parse_global_var_declaration();
-    } else if (current_token.type == vyn::TokenType::IDENTIFIER && current_token.lexeme == "template") { // KEYWORD_TEMPLATE
+    } else if (current_token.type == vyn::TokenType::KEYWORD_TEMPLATE) { // Changed this line
         return this->parse_template_declaration();
     } else if (current_token.type == vyn::TokenType::KEYWORD_IMPORT ||
                (current_token.type == vyn::TokenType::IDENTIFIER && current_token.lexeme == "import")) {

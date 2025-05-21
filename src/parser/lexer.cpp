@@ -73,10 +73,55 @@ std::vector<vyn::token::Token> Lexer::tokenize() {
     }
 
     if (is_digit(c)) {
-      std::string int_part_str = consume_while([this](char char_digit_pred) {
+      std::string int_part_str;
+      if (c == '0' && pos_ + 1 < source_.size()) {
+        char next = source_[pos_ + 1];
+        if (next == 'x' || next == 'X') {
+          // Hexadecimal
+          int_part_str += c;
+          int_part_str += next;
+          pos_ += 2;
+          column_ += 2;
+          bool has_digits = false;
+          while (pos_ < source_.size() && ((source_[pos_] >= '0' && source_[pos_] <= '9') || 
+                                         (source_[pos_] >= 'a' && source_[pos_] <= 'f') || 
+                                         (source_[pos_] >= 'A' && source_[pos_] <= 'F'))) {
+            int_part_str += source_[pos_];
+            pos_++;
+            column_++;
+            has_digits = true;
+          }
+          if (!has_digits) {
+            throw std::runtime_error("Invalid hexadecimal literal: missing digits after 0x at line " + std::to_string(line_) + ", column " + std::to_string(column_));
+          }
+          tokens.emplace_back(vyn::TokenType::INT_LITERAL, int_part_str, vyn::SourceLocation{current_file_path_, current_line_start_for_token, current_column_start_for_token});
+          maybe_print_token(tokens.back());
+          continue;
+        } else if (next == 'b' || next == 'B') {
+          // Binary
+          int_part_str += c;
+          int_part_str += next;
+          pos_ += 2;
+          column_ += 2;
+          bool has_digits = false;
+          while (pos_ < source_.size() && (source_[pos_] == '0' || source_[pos_] == '1')) {
+            int_part_str += source_[pos_];
+            pos_++;
+            column_++;
+            has_digits = true;
+          }
+          if (!has_digits) {
+            throw std::runtime_error("Invalid binary literal: missing digits after 0b at line " + std::to_string(line_) + ", column " + std::to_string(column_));
+          }
+          tokens.emplace_back(vyn::TokenType::INT_LITERAL, int_part_str, vyn::SourceLocation{current_file_path_, current_line_start_for_token, current_column_start_for_token});
+          maybe_print_token(tokens.back());
+          continue;
+        }
+      }
+      // Regular decimal integer
+      int_part_str = consume_while([this](char char_digit_pred) {
         return is_digit(char_digit_pred);
       });
-
       // Check for range operator ".."
       // pos_ is at the character immediately after int_part_str
       if (pos_ + 1 < source_.size() && source_[pos_] == '.' && source_[pos_ + 1] == '.') {
@@ -429,6 +474,7 @@ vyn::TokenType Lexer::get_keyword_type(const std::string& word) {
         {"my", vyn::TokenType::KEYWORD_MY},
         {"our", vyn::TokenType::KEYWORD_OUR},
         {"their", vyn::TokenType::KEYWORD_THEIR},
+        {"unsafe", vyn::TokenType::KEYWORD_UNSAFE},
         {"ptr", vyn::TokenType::KEYWORD_PTR},
         {"borrow", vyn::TokenType::KEYWORD_BORROW},
         {"view", vyn::TokenType::KEYWORD_VIEW},
