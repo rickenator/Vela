@@ -35,6 +35,12 @@ As the Vyn project grows, a more structured directory layout will be beneficial 
     -   All `#include` paths within the project files will need to be updated.
     -   **Timing:** This is a desirable refactoring but should likely be undertaken after initial VRE/LLVM milestones are achieved, or during a dedicated refactoring phase, to avoid disrupting the current development momentum on core features.
 
+#### Codebase Cleanup and Organization
+
+-   **Address Duplicate Files**: Resolve the duplication of header and source files identified in `/include/vyn/` and `/src/` directories by consolidating them into the `/parser/` subdirectories as planned.
+-   **Implement Proposed Directory Structure**: Refactor the codebase to follow the proposed `src/` and `include/vyn/` directory layouts (`ast/`, `parser/`, `sema/`, `codegen/`, `vre/`, `core/`).
+-   **Review for Stale/Unused Code**: Conduct a thorough review of the codebase to identify and remove any other stale or unused files and code segments.
+
 ### Build System and Includes
 
 -   **`vyn.hpp` as a Central Include:**
@@ -43,6 +49,38 @@ As the Vyn project grows, a more structured directory layout will be beneficial 
     -   The EBNF grammar, if kept in `vyn.hpp`, should be clearly demarcated (e.g., within a large comment block) if the file also serves as an active header for code. Alternatively, the EBNF could reside purely in a design document like `AST.md`.
 
 ## Future Language & System Considerations
+
+### Refinement of Memory Model and Unsafe Operations
+
+-   **Complete LLVM Codegen**: Finish the implementation and refinement of LLVM code generation for `LocationExpression`, `PointerDerefExpression`, `AddrOfExpression`, and `FromIntToLocExpression` in `src/vre/llvm/cgen_expr.cpp`.
+-   **Enhance Semantic Analysis**: Strengthen semantic checks related to memory operations, including more robust type validation and analysis within `unsafe` blocks.
+-   **Runtime Checks (Optional)**: Investigate adding optional runtime checks for null pointer dereferences and out-of-bounds access, potentially controlled by build flags.
+
+### Formalization of Compiler Intrinsics
+
+-   **Document Intrinsics Mechanism**: Clearly document the process by which compiler intrinsics (like memory operations) are recognized and handled throughout the compiler pipeline (parsing, semantic analysis, code generation).
+-   **Define Interface for New Intrinsics**: Establish a clear interface or pattern for adding new compiler intrinsics in the future.
+
+### Standard Library Development
+
+-   **Core Modules**: Begin implementing core standard library modules for common data structures (e.g., lists, maps), I/O operations, threading primitives, and utility functions.
+-   **Integrate with Compiler**: Ensure seamless integration between standard library components and the compiler, especially concerning ownership, borrowing, and generics.
+
+### Improved Error Handling and Reporting
+
+-   **Develop Error Framework**: Implement a more structured error handling and reporting framework beyond simple console logging.
+-   **Contextual Error Messages**: Provide more detailed and contextual error messages, including source locations, to aid developers in debugging.
+
+### Testing Infrastructure
+
+-   **Expand Test Coverage**: Write comprehensive unit and integration tests for all language features, with a focus on complex areas like memory management, ownership, concurrency, and generics.
+-   **Automated Testing**: Set up automated testing in the build pipeline.
+
+### Documentation Improvements
+
+-   **User Guides and Tutorials**: Create user-friendly guides and tutorials covering language features, build process, and using the standard library.
+-   **API Reference**: Generate or manually create a reference documentation for the standard library and core compiler interfaces.
+-   **Compiler Internals Documentation**: Add more detailed documentation on compiler internals, including the AST, semantic analysis, and code generation phases.
 
 ### Bundles & Sharing System
 

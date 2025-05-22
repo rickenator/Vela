@@ -1,0 +1,53 @@
+# Vyn Codebase Cleanup Notes
+
+## Identified Issues
+
+### 1. Duplicate Header Files
+
+The following header files exist in both `/include/vyn/` and `/include/vyn/parser/`:
+- ast.hpp
+- lexer.hpp
+- parser.hpp
+- source_location.hpp
+- token.hpp
+
+From the code inspection, the correct versions appear to be in `/include/vyn/parser/`.
+
+### 2. Unused/Empty Files
+
+- `/src/vyn/intrinsics.cpp` - Empty file that was removed
+- `/include/vyn/vre/semantic.hpp` - Duplicate semantic header file that was removed
+
+### 3. Confusing Intrinsics Implementation
+
+The `/src/vre/intrinsics.cpp` file only contained a `println` implementation, with no actual implementation of the memory operations (`loc`, `at`, `addr`, `from`) which are documented in `doc/Memory_Operations.md` and `doc/Intrinsics.md`.
+
+## Cleanup Actions Taken
+
+1. Removed empty `/src/vyn/intrinsics.cpp`
+2. Removed duplicate `/include/vyn/vre/semantic.hpp`
+3. Updated `/src/vre/intrinsics.cpp` with better documentation explaining that memory operations are compiler intrinsics, not runtime functions
+
+## Cleanup Actions Needed
+
+1. Decide whether to remove duplicate header files in `/include/vyn/` or consolidate them
+2. Update the documentation to clearly explain that memory operations are compiler intrinsics
+3. Review if any other files are stale or can be removed
+4. Consider adding better documentation for how the memory operations are actually implemented in the compiler
+
+## Implementation Locations for Memory Operations
+
+The memory operations (`loc`, `at`, `addr`, `from`) are implemented in:
+
+1. **AST Nodes**: `/include/vyn/parser/ast.hpp`
+   - LocationExpression
+   - PointerDerefExpression
+   - AddrOfExpression
+   - FromIntToLocExpression
+
+2. **Semantic Analysis**: `/src/vre/semantic.cpp`
+   - Type checking
+   - Unsafe block verification
+
+3. **LLVM Code Generation**: `/src/vre/llvm/cgen_expr.cpp`
+   - Translation to LLVM IR instructions

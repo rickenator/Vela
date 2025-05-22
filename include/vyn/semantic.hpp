@@ -1,4 +1,14 @@
 #pragma once
+/**
+ * @file semantic.hpp
+ * @brief This is the primary semantic analysis header for the Vyn compiler.
+ *
+ * IMPORTANT: This file was previously duplicated as include/vyn/vre/semantic.hpp
+ * which was removed during cleanup. Do not create duplicate headers!
+ *
+ * The implementation for this header is in src/vre/semantic.cpp
+ */
+
 #include "vyn/parser/ast.hpp" // Ensure ast.hpp is included
 #include <string>
 #include <unordered_map>
