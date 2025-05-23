@@ -36,6 +36,11 @@ void LLVMCodegen::visit(vyn::ast::VariableDeclaration* node) {
     }
 
     if (node->init) {
+        // Make sure the initializer knows its intended type if available
+        if (node->typeNode && !node->init->type) {
+            node->init->type = node->typeNode->clone();
+        }
+        
         node->init->accept(*this);
         initialVal = m_currentLLVMValue;
         if (!initialVal) {
@@ -43,6 +48,15 @@ void LLVMCodegen::visit(vyn::ast::VariableDeclaration* node) {
             m_currentLLVMValue = nullptr;
             return;
         }
+        
+        // If the initializer was an ObjectLiteral, ensure we properly set up type information
+        if (auto* objLiteral = dynamic_cast<vyn::ast::ObjectLiteral*>(node->init.get())) {
+            if (objLiteral->typePath && !node->typeNode) {
+                // Create a TypeNode for the variable based on the ObjectLiteral's type
+                node->typeNode = objLiteral->typePath->clone();
+            }
+        }
+        
         if (!varType) {
             varType = initialVal->getType();
         } else {
@@ -93,7 +107,12 @@ void LLVMCodegen::visit(vyn::ast::VariableDeclaration* node) {
             node->id->name
         );
         namedValues[node->id->name] = globalVar;
+        std::cout << "DEBUG: Registered global variable '" << node->id->name << "' in namedValues with ptr=" << (void*)globalVar << std::endl;
         m_currentLLVMValue = globalVar;
+        // Propagate type info for struct/class variables
+        if (node->typeNode) {
+            valueTypeMap[globalVar] = std::shared_ptr<vyn::ast::TypeNode>(node->typeNode->clone());
+        }
     } else { // Local variable
         llvm::AllocaInst* alloca = llvm::dyn_cast_or_null<llvm::AllocaInst>(
             createEntryBlockAlloca(currentFunction, node->id->name, varType)
@@ -104,8 +123,20 @@ void LLVMCodegen::visit(vyn::ast::VariableDeclaration* node) {
              return;
         }
         builder->CreateStore(initialVal, alloca);
-        namedValues[node->id->name] = alloca; 
-        m_currentLLVMValue = alloca; // The "value" of a declaration is its memory location (for l-value purposes)
+        // Register the variable in namedValues
+        namedValues[node->id->name] = alloca;
+        // Store the type info for this variable
+        if (node->id->type) {
+            valueTypeMap[alloca] = node->id->type;
+            std::cout << "DEBUG: Registered local variable '" << node->id->name << "' in namedValues with ptr=" << (void*)alloca << ", type=" << node->id->type->toString() << std::endl;
+        } else {
+            std::cout << "DEBUG: Registered local variable '" << node->id->name << "' in namedValues with ptr=" << (void*)alloca << ", but NO type info!" << std::endl;
+        }
+        m_currentLLVMValue = alloca;
+        // Propagate type info for struct/class variables
+        if (node->typeNode) {
+            valueTypeMap[alloca] = std::shared_ptr<vyn::ast::TypeNode>(node->typeNode->clone());
+        }
     }
 }
 

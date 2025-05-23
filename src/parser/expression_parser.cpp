@@ -116,8 +116,7 @@ namespace vyn {
             TypeParser type_parser(tokens_, pos_, current_file_path_, *this); // Pass *this for ExpressionParser reference
             ast::TypeNodePtr type_node = type_parser.parse(); // Call parse() instead of parse_type_annotation()
             
-            if (type_node && match(TokenType::LPAREN)) { // Successfully parsed a type and found \\\'(\\\'
-                // It\'s a ConstructionExpression
+            if (type_node && match(TokenType::LPAREN)) { // Successfully parsed a type and found '(' 
                 std::vector<vyn::ast::ExprPtr> arguments;
                 SourceLocation call_loc = previous_token().location; 
                 if (!match(TokenType::RPAREN)) { 
@@ -126,6 +125,26 @@ namespace vyn {
                     } while (match(TokenType::COMMA));
                     expect(TokenType::RPAREN);
                 }
+                // Handle memory intrinsics parsed as type-like calls
+                if (auto tname = dynamic_cast<ast::TypeName*>(type_node.get())) {
+                    std::string name = tname->identifier ? tname->identifier->name : std::string();
+                    if (name == "loc") {
+                        if (arguments.size() != 1) throw error(peek(), "loc() expects 1 argument");
+                        return std::make_unique<ast::LocationExpression>(call_loc, std::move(arguments[0]));
+                    } else if (name == "addr") {
+                        if (arguments.size() != 1) throw error(peek(), "addr() expects 1 argument");
+                        return std::make_unique<ast::AddrOfExpression>(call_loc, std::move(arguments[0]));
+                    } else if (name == "at") {
+                        if (arguments.size() != 1) throw error(peek(), "at() expects 1 argument");
+                        return std::make_unique<ast::PointerDerefExpression>(call_loc, std::move(arguments[0]));
+                    } else if (name == "from") {
+                        if (tname->genericArgs.size() != 1) throw error(peek(), "from<T>() expects a single generic type argument");
+                        if (arguments.size() != 1) throw error(peek(), "from<T>() expects 1 argument");
+                        auto targetType = std::move(tname->genericArgs[0]);
+                        return std::make_unique<ast::FromIntToLocExpression>(call_loc, std::move(arguments[0]), std::move(targetType));
+                    }
+                }
+                // Fallback to regular construction
                 return std::make_unique<ast::ConstructionExpression>(type_node->loc, std::move(type_node), std::move(arguments));
             } else {
                 // Not a TypeName(...), backtrack
@@ -705,33 +724,28 @@ regular_array_literal:
                     auto id = static_cast<ast::Identifier*>(expr.get());
                     std::string name = id->name;
 
-                    // Handle intrinsic-like calls: loc(var), addr(loc_var), from(addr_val), at(loc_var)
-                    // These are parsed as regular calls but might have special handling in semantic analysis / codegen.
-                    // For now, the parser treats them as CallExpressions.
-                    // Argument count checks could be here or in semantic analysis.
-                    // Example of an early check (could be too strict or misplaced for a generic parser):
-                    if (name == "loc" || name == "addr" || name == "from" || name == "at") {
-                         // This is a simplified intrinsic check. Real intrinsics might need more context.
+                    // Handle intrinsic-like calls: loc(var), addr(loc_var), at(loc_var)
+                    if (name == "loc" || name == "addr" || name == "at") {
                         std::vector<vyn::ast::ExprPtr> arguments;
-                        if (!check(TokenType::RPAREN)) { // If there are arguments
-                            arguments.push_back(parse_expression()); // Assuming intrinsics take one argument
-                            // Add loop for multiple arguments if intrinsics can take more:
-                            // while (match(TokenType::COMMA)) {
-                            //     arguments.push_back(parse_expression());
-                            // }
+                        if (!check(TokenType::RPAREN)) {
+                            arguments.push_back(parse_expression());
                         }
                         expect(TokenType::RPAREN);
-                        
-                        // Argument count validation (example)
-                        size_t expected_arg_count = 1; // Most of these take 1 arg
-                        if (arguments.size() != expected_arg_count) {
-                            // Create a token for error reporting based on the intrinsic\'s identifier
+                        if (arguments.size() != 1) {
                             vyn::token::Token intrinsic_token(vyn::TokenType::IDENTIFIER, name, id->loc);
-                            throw error(intrinsic_token, "Intrinsic \'" + name + "\' expects " + std::to_string(expected_arg_count) + " argument(s), got " + std::to_string(arguments.size()) + ".");
+                            throw error(intrinsic_token,
+                                std::string("Intrinsic '") + name + "' expects 1 argument, got " + std::to_string(arguments.size()));
                         }
-                        // Create CallExpression for the intrinsic
-                        expr = std::make_unique<ast::CallExpression>(op_loc, std::move(expr), std::move(arguments));
-                        continue; // Continue to see if there are more postfix operations
+                        // Create specialized AST node for intrinsic
+                        auto& arg0 = arguments[0];
+                        if (name == "loc") {
+                            expr = std::make_unique<ast::LocationExpression>(op_loc, std::move(arg0));
+                        } else if (name == "addr") {
+                            expr = std::make_unique<ast::AddrOfExpression>(op_loc, std::move(arg0));
+                        } else { // at
+                            expr = std::make_unique<ast::PointerDerefExpression>(op_loc, std::move(arg0));
+                        }
+                        continue;
                     }
                 }
                 // If not an intrinsic or not an identifier, parse as a regular call expression

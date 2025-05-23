@@ -70,6 +70,7 @@ LLVMCodegen::LLVMCodegen(Driver& driver)
       module(std::make_unique<llvm::Module>("VynModule", *this->context)), 
       builder(std::make_unique<llvm::IRBuilder<>>(*this->context)),
       m_isLHSOfAssignment(false),
+      verbose(false),
       currentFunction(nullptr),
       currentClassType(nullptr),
       m_currentLLVMValue(nullptr),

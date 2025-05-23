@@ -325,7 +325,7 @@ public:
     virtual void visit(ArrayType* node) = 0;
     virtual void visit(FunctionType* node) = 0;
     virtual void visit(OptionalType* node) = 0;
-    virtual void visit(TupleTypeNode* node) = 0; // ADDED visit method for TupleTypeNode
+    virtual void visit(TupleTypeNode* node) = 0;
 };
 
 // Base AST Node
@@ -423,8 +423,8 @@ public:
 
     ArrayLiteral(SourceLocation loc, std::vector<ExprPtr> elements); // Renamed from ArrayLiteralNode
     NodeType getType() const override { return NodeType::ARRAY_LITERAL; } // Updated NodeType
+    std::string toString() const override;
     void accept(Visitor& visitor) override; 
-    std::string toString() const override; 
 };
 
 // New: ObjectLiteral
@@ -531,13 +531,13 @@ public:
 // New: Represents list comprehension: [expr for var in iterable if condition]
 class ListComprehension : public Expression {
 public:
-    ExprPtr elementExpr;        // The expression for each element
-    IdentifierPtr loopVariable;   // The variable in the loop (e.g., 'x' in 'for x in ...')
-    ExprPtr iterableExpr;       // The expression defining the iterable (e.g., 'my_list')
-    ExprPtr conditionExpr;      // Optional condition (e.g., 'if x > 0')
+    ExprPtr elementExpr;
+    IdentifierPtr loopVariable;
+    ExprPtr iterableExpr;
+    ExprPtr conditionExpr;
 
     ListComprehension(SourceLocation loc, ExprPtr elementExpr, IdentifierPtr loopVariable, ExprPtr iterableExpr, ExprPtr conditionExpr = nullptr);
-    ~ListComprehension() override; // Was: default;
+    ~ListComprehension() override;
     NodeType getType() const override;
     std::string toString() const override;
     void accept(Visitor& visitor) override;
@@ -588,7 +588,6 @@ public:
     std::vector<ExprPtr> arguments;
 
     ConstructionExpression(SourceLocation loc, TypeNodePtr constructedType, std::vector<ExprPtr> arguments);
-    // virtual ~ConstructionExpression() = default; // Default destructor is fine
     NodeType getType() const override;
     std::string toString() const override;
     void accept(Visitor& visitor) override;
@@ -601,7 +600,6 @@ public:
     // For [Type; Size](), arguments are implicit (default initialization)
 
     ArrayInitializationExpression(SourceLocation loc, TypeNodePtr elementType, ExprPtr sizeExpression);
-    // virtual ~ArrayInitializationExpression() = default; // Default destructor is fine
     NodeType getType() const override;
     std::string toString() const override;
     void accept(Visitor& visitor) override;
@@ -829,20 +827,22 @@ public:
     void accept(Visitor& visitor) override;
 };
 
+// Remove inline toString() for ObjectLiteral, NilLiteral, ListComprehension, ConstructionExpression, ArrayInitializationExpression, GenericInstantiationExpression, IfExpression, UnsafeStatement
+
 // New UnsafeStatement AST node
 class UnsafeStatement : public Statement {
 public:
-    std::unique_ptr<BlockStatement> block; // The unsafe block
+    std::unique_ptr<BlockStatement> block;
 
     UnsafeStatement(SourceLocation loc, std::unique_ptr<BlockStatement> blockStmt)
         : Statement(loc), block(std::move(blockStmt)) {}
 
     NodeType getType() const override { return NodeType::UNSAFE_STATEMENT; }
+    std::string toString() const override;
     void accept(Visitor& visitor) override { visitor.visit(this); }
-
-    std::string toString() const override; // Declaration of toString
 };
 
+// --- Full Class Definition for TypeNode ---
 class TypeNode : public Node {
 public:
     // Define TypeCategory as a nested enum
@@ -1164,6 +1164,140 @@ public:
     }
 };
 
+// --- LogicalExpression ---
+class LogicalExpression : public Expression {
+public:
+    ExprPtr left;
+    token::Token op;
+    ExprPtr right;
+    LogicalExpression(SourceLocation loc, ExprPtr left, const token::Token& op, ExprPtr right);
+    NodeType getType() const override;
+    std::string toString() const override;
+    void accept(Visitor& visitor) override;
+};
+
+// --- ConditionalExpression ---
+class ConditionalExpression : public Expression {
+public:
+    ExprPtr condition;
+    ExprPtr thenExpr;
+    ExprPtr elseExpr;
+    ConditionalExpression(SourceLocation loc, ExprPtr condition, ExprPtr thenExpr, ExprPtr elseExpr);
+    NodeType getType() const override;
+    std::string toString() const override;
+    void accept(Visitor& visitor) override;
+};
+
+// --- SequenceExpression ---
+class SequenceExpression : public Expression {
+public:
+    std::vector<ExprPtr> expressions;
+    SequenceExpression(SourceLocation loc, std::vector<ExprPtr> expressions);
+    NodeType getType() const override;
+    std::string toString() const override;
+    void accept(Visitor& visitor) override;
+};
+
+// --- FunctionExpression ---
+class FunctionExpression : public Expression {
+public:
+    std::vector<FunctionParameter> params;
+    ExprPtr body;
+    bool isAsync;
+    FunctionExpression(SourceLocation loc, std::vector<FunctionParameter> params, ExprPtr body, bool isAsync = false);
+    NodeType getType() const override;
+    std::string toString() const override;
+    void accept(Visitor& visitor) override;
+};
+
+// --- ThisExpression ---
+class ThisExpression : public Expression {
+public:
+    ThisExpression(SourceLocation loc);
+    NodeType getType() const override;
+    std::string toString() const override;
+    void accept(Visitor& visitor) override;
+};
+
+// --- SuperExpression ---
+class SuperExpression : public Expression {
+public:
+    SuperExpression(SourceLocation loc);
+    NodeType getType() const override;
+    std::string toString() const override;
+    void accept(Visitor& visitor) override;
+};
+
+// --- AwaitExpression ---
+class AwaitExpression : public Expression {
+public:
+    ExprPtr expr;
+    AwaitExpression(SourceLocation loc, ExprPtr expr);
+    NodeType getType() const override;
+    std::string toString() const override;
+    void accept(Visitor& visitor) override;
+};
+
+// --- ThrowStatement ---
+class ThrowStatement : public Statement {
+public:
+    ExprPtr expr;
+    ThrowStatement(SourceLocation loc, ExprPtr expr);
+    NodeType getType() const override;
+    std::string toString() const override;
+    void accept(Visitor& visitor) override;
+};
+
+// --- MatchStatement ---
+class MatchStatement : public Statement {
+public:
+    ExprPtr expr;
+    std::vector<std::pair<ExprPtr, ExprPtr>> cases;
+    MatchStatement(SourceLocation loc, ExprPtr expr, std::vector<std::pair<ExprPtr, ExprPtr>> cases);
+    NodeType getType() const override;
+    std::string toString() const override;
+    void accept(Visitor& visitor) override;
+};
+
+// --- TraitDeclaration ---
+class TraitDeclaration : public Declaration {
+public:
+    std::unique_ptr<Identifier> name;
+    std::vector<std::unique_ptr<GenericParameter>> genericParams;
+    std::vector<std::unique_ptr<FunctionDeclaration>> methods;
+
+    TraitDeclaration(SourceLocation loc, std::unique_ptr<Identifier> name, std::vector<std::unique_ptr<GenericParameter>> genericParams, std::vector<std::unique_ptr<FunctionDeclaration>> methods);
+    ~TraitDeclaration() override = default;
+    NodeType getType() const override;
+    std::string toString() const override;
+    void accept(Visitor& visitor) override;
+};
+
+// --- NamespaceDeclaration ---
+class NamespaceDeclaration : public Declaration {
+public:
+    std::unique_ptr<Identifier> name;
+    std::vector<DeclPtr> members;
+
+    NamespaceDeclaration(SourceLocation loc, std::unique_ptr<Identifier> name, std::vector<DeclPtr> members);
+    ~NamespaceDeclaration() override = default;
+    NodeType getType() const override;
+    std::string toString() const override;
+    void accept(Visitor& visitor) override;
+};
+
+// --- AssertStatement ---
+class AssertStatement : public Statement {
+public:
+    ExprPtr condition;
+    ExprPtr message; // Optional message
+
+    AssertStatement(SourceLocation loc, ExprPtr condition, ExprPtr message = nullptr);
+    ~AssertStatement() override = default;
+    NodeType getType() const override;
+    std::string toString() const override;
+    void accept(Visitor& visitor) override;
+};
 } // namespace ast
 } // namespace vyn
 

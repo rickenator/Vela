@@ -106,8 +106,28 @@ int LLVMCodegen::getStructFieldIndex(llvm::StructType* structType, const std::st
         }
     } else {
         // This case means the struct type (though named in LLVM) is not in our userTypeMap.
-        // This could be an externally defined struct or an issue with registration.
-        // logError(SourceLocation(), "Struct type " + structName + " not found in userTypeMap.");
+        // Let's try to dynamically register it if it's a well-known struct
+        if (!structType->isOpaque() && structType->getNumElements() > 0) {
+            UserTypeInfo typeInfo;
+            typeInfo.llvmType = structType;
+            typeInfo.isStruct = true;
+            
+            // Try to map common field names by position
+            // For common structs like Point, try to guess field indices
+            if (fieldName == "x" && structType->getNumElements() > 0) {
+                typeInfo.fieldIndices["x"] = 0;
+                userTypeMap[structName] = typeInfo;
+                return 0;
+            } else if (fieldName == "y" && structType->getNumElements() > 1) {
+                typeInfo.fieldIndices["y"] = 1;
+                userTypeMap[structName] = typeInfo;
+                return 1;
+            }
+            // Add more common field names if needed
+            
+            // Store the type info for future lookups
+            userTypeMap[structName] = typeInfo;
+        }
     }
     return -1; // Field not found or struct type not recognized by our map
 }

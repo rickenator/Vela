@@ -13,8 +13,8 @@ namespace vyn {
 // --- Statements ---
 
 void LLVMCodegen::visit(vyn::ast::BlockStatement* node) {
-    // Scoping for namedValues would be handled here in a more advanced setup.
-    // For now, new allocas are function-scoped.
+    // Save the current namedValues for block scoping
+    auto oldNamedValues = namedValues;
     for (const auto& stmt : node->body) {
         stmt->accept(*this);
         if (builder->GetInsertBlock() && builder->GetInsertBlock()->getTerminator()) {
@@ -26,56 +26,33 @@ void LLVMCodegen::visit(vyn::ast::BlockStatement* node) {
             break; 
         }
     }
+    // Restore namedValues to outer scope
+    namedValues = std::move(oldNamedValues);
 }
 
-void LLVMCodegen::visit(vyn::ast::ReturnStatement* node) {
+void LLVMCodegen::visit(vyn::ast::ReturnStatement *node) {
     if (node->argument) {
-        node->argument->accept(*this);
-        llvm::Value* returnValue = m_currentLLVMValue;
+        // Codegen the argument expression. The result will be in m_currentLLVMValue.
+        node->argument->accept(*this); 
+        llvm::Value *returnValue = m_currentLLVMValue;
+
         if (returnValue) {
-            if (currentFunction) {
-                llvm::Type* expectedReturnType = currentFunction->getReturnType();
-                if (returnValue->getType() != expectedReturnType) {
-                    // Attempt to cast if types are different but compatible (e.g. int to float)
-                    // This is a placeholder for more sophisticated type checking and casting.
-                    // For now, we'll log an error if types don't match exactly.
-                    // A more robust solution would involve checking assignability or implicit conversions.
-                    llvm::Value* castedValue = tryCast(returnValue, expectedReturnType, node->loc);
-                    if (!castedValue) {
-                        logError(node->loc, "Return value type (" + getTypeName(returnValue->getType()) +
-                                           ") does not match function return type (" + getTypeName(expectedReturnType) +
-                                           ") and no cast was performed.");
-                        // Return undef if types mismatch and no cast, to avoid IR errors, but signal problem
-                        builder->CreateRet(llvm::UndefValue::get(expectedReturnType));
-                        m_currentLLVMValue = nullptr;
-                        return;
-                    }
-                    returnValue = castedValue;
-                }
-                builder->CreateRet(returnValue);
-            } else {
-                logError(node->loc, "Return statement outside of a function.");
-            }
+            builder->CreateRet(returnValue);
         } else {
-            logError(node->loc, "Return argument evaluated to null.");
-            if (currentFunction && !currentFunction->getReturnType()->isVoidTy()) {
-                 builder->CreateRet(llvm::UndefValue::get(currentFunction->getReturnType()));
-            } else if (currentFunction) { // Void return type, and argument was null (error already logged)
-                 builder->CreateRetVoid();
+            // Error during argument codegen or argument is null expression (should not happen for valid AST)
+            // TODO: Report error (Return argument codegen failed or resulted in null)
+            if (currentFunction && currentFunction->getReturnType()->isVoidTy()) {
+                builder->CreateRetVoid();
+            } else if (currentFunction) {
+                // Return undef if function expects a non-void type and codegen failed
+                builder->CreateRet(llvm::UndefValue::get(currentFunction->getReturnType()));
+                logError(node->loc, "Return expression codegen failed, returning undef.");
             }
         }
     } else {
-        // Return void
-        if (currentFunction && !currentFunction->getReturnType()->isVoidTy()) {
-            logError(node->loc, "Void return in function with non-void return type " + getTypeName(currentFunction->getReturnType()));
-             builder->CreateRet(llvm::UndefValue::get(currentFunction->getReturnType())); // Return undef to satisfy LLVM if type is non-void
-        } else if (currentFunction) { // Correctly returning void from a void function
-            builder->CreateRetVoid();
-        } else {
-            logError(node->loc, "Return statement (void) outside of a function.");
-        }
+        // No argument, so it's a void return
+        builder->CreateRetVoid();
     }
-    m_currentLLVMValue = nullptr; // Return statement doesn't produce a value for further expressions
 }
 
 void LLVMCodegen::visit(vyn::ast::ExpressionStatement* node) {

@@ -10,6 +10,17 @@ Intrinsics in Vyn serve several purposes:
 2. **Raw Performance**: Operations that need direct mapping to hardware instructions
 3. **Special Semantics**: Operations with behavior that can't be represented in regular Vyn code
 
+## 1.1 Reserved Identifiers
+
+The following identifiers are reserved for intrinsic functions and should not be used as variable, function, or parameter names:
+
+- `addr` - Used for the address-of intrinsic function
+- `at` - Used for pointer dereferencing
+- `loc` - Used for pointer creation
+- `from` - Used for pointer type conversion
+
+Using these names as variables or function names can lead to ambiguity and compilation errors, especially when they appear in contexts where the compiler might interpret them as intrinsic function calls.
+
 ## 2. Memory Intrinsics
 
 These intrinsics provide low-level memory manipulation capabilities. They must be used within unsafe blocks.

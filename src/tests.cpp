@@ -15,9 +15,10 @@
 #include <llvm/Support/raw_ostream.h>
 
 #include "vyn/driver.hpp" // Added for vyn::Driver
+#include <fstream> // Required for std::ofstream
 
 // Forward declare run_vyn_code
-int run_vyn_code(const std::string& source);
+int run_vyn_code(const std::string& source, const std::string& testName = "test_runtime.vyn", bool generateLLVMIR = false);
 
 // Globals for verbose test control (defined in main.cpp)
 extern std::set<std::string> g_verbose_test_specifiers;
@@ -83,8 +84,8 @@ public:
     void visit(vyn::ast::TemplateDeclaration* node) override {};
     void visit(vyn::ast::TypeNode* node) override {};
     void visit(vyn::ast::Module* node) override {
-        // Call base if it has a default or if specific logic is needed for tests
-        // For now, keeping it empty as the base might be abstract too.
+        // Call base class implementation to perform semantic analysis
+        vyn::SemanticAnalyzer::visit(node);
     };
     void visit(vyn::ast::TupleTypeNode* node) override {};
     // Add any other missing pure virtuals from ast::Visitor that SemanticAnalyzer doesn't cover
@@ -140,8 +141,6 @@ public:
     // (cross-reference with SemanticAnalyzer's list and ast.hpp)
     void visit(vyn::ast::BorrowExpression* node) override {};
     void visit(vyn::ast::IfExpression* node) override {};
-    void visit(vyn::ast::ConstructionExpression* node) override {};
-    void visit(vyn::ast::ArrayInitializationExpression* node) override {};
     void visit(vyn::ast::FieldDeclaration* node) override {};
     void visit(vyn::ast::EnumVariant* node) override {};
     void visit(vyn::ast::TemplateDeclaration* node) override {};
@@ -152,7 +151,26 @@ public:
         // Call base class implementation to generate LLVM IR
         vyn::LLVMCodegen::visit(node);
     };
-    void visit(vyn::ast::ArrayElementExpression* node) override {};
+    // void visit(vyn::ast::ArrayElementExpression* node) override {}; // Already in LLVMCodegen
+    // void visit(vyn::ast::LocationExpression* node) override {}; // Already in LLVMCodegen
+
+    // Add stubs for methods causing linker errors if not genuinely implemented in LLVMCodegen
+    // These might be needed if LLVMCodegen is instantiated directly elsewhere, not just via DummyLLVMCodegen
+    // However, the linker errors point to LLVMCodegen's vtable directly.
+    // It's better to ensure LLVMCodegen implements them or they are pure virtual and DummyLLVMCodegen implements them.
+    // For now, ensure DummyLLVMCodegen covers everything LLVMCodegen might be missing an impl for.
+
+    // From linker errors, these are needed if LLVMCodegen doesn't provide them:
+    // void visit(vyn::ast::CallExpression* node) override {}; // Already in LLVMCodegen decl, ensure Dummy has it if LLVMCodegen doesn't implement
+    // void visit(vyn::ast::MemberExpression* node) override {}; // Already in LLVMCodegen decl, ensure Dummy has it if LLVMCodegen doesn't implement
+    // void visit(vyn::ast::AssignmentExpression* node) override {}; // Implemented in LLVMCodegen, Dummy should inherit
+
+    // Ensure all virtuals from ast::Visitor are covered if LLVMCodegen doesn't cover them.
+    // This list should be cross-referenced with ast.hpp and LLVMCodegen's declarations.
+
+    // Added based on previous edits to cgen_expr.cpp, ensure these are covered if not in LLVMCodegen
+    // void visit(vyn::ast::IdentifierExpression* node) override {}; // Removed, assuming ast::Identifier is used.
+
 };
 
 // --- END: Dummy Visitor Implementations for Tests ---
@@ -735,8 +753,8 @@ fn main() -> Int{
 
     std::string source_err = R"(
 fn main() -> Int {
-    var addr: Int = 0x1234;
-    var p: loc<Int> = from<loc<Int>>(addr); // Updated syntax
+    var a: Int = 0x1234;
+    var p: loc<Int> = from<loc<Int>>(a);
     return 0;
 }
 )";
@@ -751,11 +769,11 @@ fn main() -> Int {
     unsafe { // p = loc(x) needs unsafe
         p = loc(x);
     }
-    var addr: Int;
+    var a: Int;
     var q: loc<Int>;
     unsafe {
-        addr = addr(p);
-        q = from<loc<Int>>(addr); // Updated syntax
+        a = addr(p);
+        q = from<loc<Int>>(a); 
     }
     // Dereferencing q to assign or read also needs unsafe
     unsafe {
@@ -770,7 +788,7 @@ fn main() -> Int {
     // If it still throws, it might indicate an issue in the codegen for `from`
     // or the interaction with `addr` and `at`.
     // For now, let's assume it should pass if `from<loc<Int>>` is correctly implemented.
-    REQUIRE(run_vyn_code(source) == 99);
+    REQUIRE(run_vyn_code(source, "test39", true) == 99);
 }
 
 // --- New Unsafe and Pointer Intrinsic Tests ---
@@ -1079,13 +1097,7 @@ fn main() -> Int {
     unsafe {
         // Attempting to cast an address to loc<OtherData> but the original (hypothetical)
         // data at md_addr was MyData. The from<Type> itself doesn't know this,
-        // but the type system should ensure that the <Type> in from<Type> is a loc type.
-        // The compiler can't verify if this pointer is then used incorrectly,
-        // but that's beyond this specific semantic check of the 'from' expression.
-        // The primary semantic check for `from<T>(expr)` is that `T` must be a pointer type (`loc<U>`)
-        // and `expr` must be an integer.
-
-        // Let's refine the test to check if the provided type is a loc type.
+        // but the type system should ensure that the <Type> in from<Type> is a pointer type.
         // The parser/AST should enforce that FromIntToLocExpression's targetType is a pointer type.
         // If the syntax was `from<Int>(addr)`, this should be a semantic error.
         var not_a_loc_ptr: Int = from<Int>(md_addr); // Error: Type in from<> must be loc<Something>
@@ -1099,11 +1111,11 @@ fn main() -> Int {
 }
 
 // Run Vyn code end-to-end: parse, analyze, codegen, JIT, run main(). Throws on error.
-int run_vyn_code(const std::string& source) {
+int run_vyn_code(const std::string& source, const std::string& testName, bool generateLLVMIR) {
     // 1. Lex and parse
-    Lexer lexer(source, "test_runtime.vyn"); // Assuming Lexer is global
+    Lexer lexer(source, testName); // Assuming Lexer is global
     auto tokens = lexer.tokenize();
-    vyn::Parser parser(tokens, "test_runtime.vyn"); // Assuming Parser is global
+    vyn::Parser parser(tokens, testName); // Assuming Parser is global
     std::unique_ptr<vyn::ast::Module> ast = parser.parse_module(); // ast::Module is in vyn::ast
 
     vyn::Driver driver; // Create a Driver instance
@@ -1121,10 +1133,43 @@ int run_vyn_code(const std::string& source) {
 
     // 3. Codegen
     DummyLLVMCodegen codegen(driver); // Use DummyLLVMCodegen and pass driver
-    codegen.generate(ast.get(), "test_module.ll"); // Corrected: Added output filename
-    std::unique_ptr<llvm::Module> llvmMod = codegen.releaseModule(); // Corrected: Use releaseModule()
+    codegen.generate(ast.get(), testName + ".ll");
+    if (generateLLVMIR) {
+        std::cerr << "--- LLVM IR dump for " << testName << " ---\n";
+        codegen.dumpIR();
+        std::cerr << "--- End of IR dump ---\n";
+        
+        // Generate IR content without releasing the module
+        std::string ir_content;
+        
+        // Get a reference to the module without releasing it
+        llvm::Module* modulePtr = codegen.getModule();
+        
+        if (modulePtr) {
+            // Save the IR content to a string
+            llvm::raw_string_ostream rso(ir_content);
+            modulePtr->print(rso, nullptr);
+            rso.flush();
+            
+            // Write the IR to a file
+            std::ofstream ir_file(testName + ".ll");
+            if (ir_file.is_open()) {
+                ir_file << ir_content;
+                ir_file.close();
+                std::cout << "LLVM IR saved to " << testName << ".ll" << std::endl;
+            } else {
+                std::cerr << "Warning: Could not open file " << testName << ".ll for writing LLVM IR." << std::endl;
+            }
+        } else {
+            std::cerr << "Warning: Could not access module for IR generation" << std::endl;
+        }
+    }
+    
+    // Get the module for execution - only release it once
+    std::unique_ptr<llvm::Module> llvmMod = codegen.releaseModule();
 
     // 4. JIT setup
+    LLVMLinkInMCJIT(); // Call this to ensure MCJIT is linked
     llvm::InitializeNativeTarget();
     llvm::InitializeNativeTargetAsmPrinter();
     llvm::InitializeNativeTargetAsmParser(); // Optional -> Now uncommented
@@ -1170,58 +1215,48 @@ int run_vyn_code(const std::string& source) {
 // This is often necessary when linking LLVM statically.
 extern "C" void LLVMLinkInMCJIT();
 
-bool run_vyn_code(const std::string& code, bool verbose, bool timeExecution, const std::string& testName, bool generateLLVMIR) {
-    // 1. Lex and parse
-    Lexer lexer(code, testName);
-    lexer.set_verbose(verbose);
-    auto tokens = lexer.tokenize();
-    vyn::Parser parser(tokens, testName);
+TEST_CASE("Basic JIT execution test", "[jit][basic][test_jit]") {
+    std::string source = R"(
+fn main() -> Int {
+    var x: Int = 42;
+    return x;
+}
+)";
+    REQUIRE(run_vyn_code(source, "test_jit", true) == 42);
+}
 
-    // TODO: Generate or obtain the LLVM module from your codegen pipeline
-    std::unique_ptr<llvm::Module> llvmMod; // Placeholder: must be assigned properly
-
-    // Ensure MCJIT is linked into the executable.
-    // Call this once, e.g., here or at the start of main().
-    LLVMLinkInMCJIT();
-
-    // 4. JIT setup
-    llvm::InitializeNativeTarget();
-    llvm::InitializeNativeTargetAsmPrinter();
-    llvm::InitializeNativeTargetAsmParser(); // Optional -> Now uncommented
-    // llvm::InitializeAllTargetMCs(); // Removed this line
-
-    std::string errStr;
-    llvm::EngineBuilder builder(std::move(llvmMod)); // llvmMod is already a unique_ptr
-    builder.setErrorStr(&errStr);
-    builder.setEngineKind(llvm::EngineKind::JIT); // Reverted to JIT
-    std::unique_ptr<llvm::ExecutionEngine> engine(builder.create());
-    if (!engine) {
-        std::string module_dump_str;
-        llvm::raw_string_ostream rso(module_dump_str);
-        // Use the llvmMod unique_ptr for dumping, as codegen no longer owns the module
-        if (llvmMod) { 
-             llvmMod->print(rso, nullptr);
-        } else {
-             rso << "Could not retrieve LLVM Module for dumping (it was null).";
-        }
-        rso.flush();
-        throw std::runtime_error("LLVM JIT error: " + errStr);
+TEST_CASE("Basic pointer operations test", "[jit][pointer][basic_pointer][test_pointer_basic]") {
+    std::string source = R"(
+fn main() -> Int {
+    var x: Int = 77;
+    var p: loc<Int>;
+    
+    unsafe {
+        p = loc(x);       // Get address of x
+        at(p) = 99;       // Modify x through pointer
     }
+    
+    return x;             // Should return 99 (the modified value)
+}
+)";
+    REQUIRE(run_vyn_code(source, "test_pointer_basic", true) == 99);
+}
 
-    // 5. Find and run main()
-    llvm::Function* mainFn = engine->FindFunctionNamed("main"); 
-    if (!mainFn) {
-        std::string module_dump_str;
-        llvm::raw_string_ostream rso(module_dump_str);
-        if (llvmMod) { // Use llvmMod for dumping
-            llvmMod->print(rso, nullptr);
-        } else {
-            rso << "Could not retrieve LLVM Module for dumping (main not found, module was null).";
-        }
-        rso.flush();
-        throw std::runtime_error("No main() function found in LLVM module");
+TEST_CASE("Basic pointer operations with opaque pointers", "[opaque_pointers][test_opaque]") {
+    std::string source = R"(
+fn main() -> Int {
+    // Test basic dereference of a pointer
+    var x: Int = 42;
+    var p: loc<Int>;
+    
+    unsafe {
+        p = loc(x);           // Create pointer to x
+        at(p) = 100;          // Modify through pointer
     }
-    std::vector<llvm::GenericValue> noargs;
-    llvm::GenericValue result = engine->runFunction(mainFn, noargs);
-    return result.IntVal.getSExtValue();
+    
+    // The modification through p should affect x
+    return x;
+}
+)";
+    REQUIRE(run_vyn_code(source, "test_opaque", true) == 100);
 }

@@ -1357,9 +1357,247 @@ void EnumDeclaration::accept(Visitor& visitor) {
     visitor.visit(this);
 }
 
-// StructType accept method was already defined in ast.hpp
-// StructType toString method was already defined in ast.hpp
-// StructType getCategory method was already defined in ast.hpp
+// --- LogicalExpression ---
+LogicalExpression::LogicalExpression(SourceLocation loc, ExprPtr left, const token::Token& op, ExprPtr right)
+    : Expression(loc), left(std::move(left)), op(op), right(std::move(right)) {}
+
+NodeType LogicalExpression::getType() const {
+    return NodeType::LOGICAL_EXPRESSION;
+}
+
+std::string LogicalExpression::toString() const {
+    return "(" + (left ? left->toString() : "nullptr") + " " + op.lexeme + " " + (right ? right->toString() : "nullptr") + ")";
+}
+
+void LogicalExpression::accept(Visitor& visitor) {
+    visitor.visit(this);
+}
+
+// --- ConditionalExpression ---
+ConditionalExpression::ConditionalExpression(SourceLocation loc, ExprPtr condition, ExprPtr thenExpr, ExprPtr elseExpr)
+    : Expression(loc), condition(std::move(condition)), thenExpr(std::move(thenExpr)), elseExpr(std::move(elseExpr)) {}
+
+NodeType ConditionalExpression::getType() const {
+    return NodeType::CONDITIONAL_EXPRESSION;
+}
+
+std::string ConditionalExpression::toString() const {
+    return "(" + (condition ? condition->toString() : "nullptr") + " ? " + (thenExpr ? thenExpr->toString() : "nullptr") + " : " + (elseExpr ? elseExpr->toString() : "nullptr") + ")";
+}
+
+void ConditionalExpression::accept(Visitor& visitor) {
+    visitor.visit(this);
+}
+
+// --- SequenceExpression ---
+SequenceExpression::SequenceExpression(SourceLocation loc, std::vector<ExprPtr> expressions)
+    : Expression(loc), expressions(std::move(expressions)) {}
+
+NodeType SequenceExpression::getType() const {
+    return NodeType::SEQUENCE_EXPRESSION;
+}
+
+std::string SequenceExpression::toString() const {
+    std::string str = "(";
+    for (size_t i = 0; i < expressions.size(); ++i) {
+        str += expressions[i] ? expressions[i]->toString() : "nullptr";
+        if (i < expressions.size() - 1) str += ", ";
+    }
+    str += ")";
+    return str;
+}
+
+void SequenceExpression::accept(Visitor& visitor) {
+    visitor.visit(this);
+}
+
+// --- FunctionExpression ---
+FunctionExpression::FunctionExpression(SourceLocation loc, std::vector<FunctionParameter> params, ExprPtr body, bool isAsync)
+    : Expression(loc), params(std::move(params)), body(std::move(body)), isAsync(isAsync) {}
+
+NodeType FunctionExpression::getType() const {
+    return NodeType::FUNCTION_EXPRESSION;
+}
+
+std::string FunctionExpression::toString() const {
+    std::string str = (isAsync ? std::string("async ") : std::string("")) + "fn(";
+    for (size_t i = 0; i < params.size(); ++i) {
+        str += params[i].name ? params[i].name->toString() : "_";
+        if (params[i].typeNode) str += ": " + params[i].typeNode->toString();
+        if (i < params.size() - 1) str += ", ";
+    }
+    str += ") => ";
+    str += body ? body->toString() : "nullptr";
+    return str;
+}
+
+void FunctionExpression::accept(Visitor& visitor) {
+    visitor.visit(this);
+}
+
+// --- ThisExpression ---
+ThisExpression::ThisExpression(SourceLocation loc)
+    : Expression(loc) {}
+
+NodeType ThisExpression::getType() const {
+    return NodeType::THIS_EXPRESSION;
+}
+
+std::string ThisExpression::toString() const {
+    return "this";
+}
+
+void ThisExpression::accept(Visitor& visitor) {
+    visitor.visit(this);
+}
+
+// --- SuperExpression ---
+SuperExpression::SuperExpression(SourceLocation loc)
+    : Expression(loc) {}
+
+NodeType SuperExpression::getType() const {
+    return NodeType::SUPER_EXPRESSION;
+}
+
+std::string SuperExpression::toString() const {
+    return "super";
+}
+
+void SuperExpression::accept(Visitor& visitor) {
+    visitor.visit(this);
+}
+
+// --- AwaitExpression ---
+AwaitExpression::AwaitExpression(SourceLocation loc, ExprPtr expr)
+    : Expression(loc), expr(std::move(expr)) {}
+
+NodeType AwaitExpression::getType() const {
+    return NodeType::AWAIT_EXPRESSION;
+}
+
+std::string AwaitExpression::toString() const {
+    return "await " + (expr ? expr->toString() : "nullptr");
+}
+
+void AwaitExpression::accept(Visitor& visitor) {
+    visitor.visit(this);
+}
+
+// --- ThrowStatement ---
+ThrowStatement::ThrowStatement(SourceLocation loc, ExprPtr expr)
+    : Statement(loc), expr(std::move(expr)) {}
+
+NodeType ThrowStatement::getType() const {
+    return NodeType::THROW_STATEMENT;
+}
+
+std::string ThrowStatement::toString() const {
+    return "throw " + (expr ? expr->toString() : "nullptr");
+}
+
+void ThrowStatement::accept(Visitor& visitor) {
+    visitor.visit(this);
+}
+
+// --- MatchStatement ---
+MatchStatement::MatchStatement(SourceLocation loc, ExprPtr expr, std::vector<std::pair<ExprPtr, ExprPtr>> cases)
+    : Statement(loc), expr(std::move(expr)), cases(std::move(cases)) {}
+
+NodeType MatchStatement::getType() const {
+    return NodeType::MATCH_STATEMENT;
+}
+
+std::string MatchStatement::toString() const {
+    std::string str = "match " + (expr ? expr->toString() : "nullptr") + " { ";
+    for (const auto& c : cases) {
+        str += (c.first ? c.first->toString() : "_") + " => " + (c.second ? c.second->toString() : "nullptr") + "; ";
+    }
+    str += "}";
+    return str;
+}
+
+void MatchStatement::accept(Visitor& visitor) {
+    visitor.visit(this);
+}
+
+// --- TraitDeclaration ---
+TraitDeclaration::TraitDeclaration(SourceLocation loc, std::unique_ptr<Identifier> n, std::vector<std::unique_ptr<GenericParameter>> gp, std::vector<std::unique_ptr<FunctionDeclaration>> meths)
+    : Declaration(loc), name(std::move(n)), genericParams(std::move(gp)), methods(std::move(meths)) {}
+
+NodeType TraitDeclaration::getType() const {
+    return NodeType::TRAIT_DECLARATION;
+}
+
+std::string TraitDeclaration::toString() const {
+    std::stringstream ss;
+    ss << "trait " << (name ? name->toString() : "") << " {\n";
+    for (const auto& method : methods) {
+        if (method) {
+            std::string methodStr = method->toString();
+            std::string line;
+            std::stringstream methodStream(methodStr);
+            while (std::getline(methodStream, line)) {
+                ss << "  " << line << "\n";
+            }
+        }
+    }
+    ss << "}";
+    return ss.str();
+}
+
+void TraitDeclaration::accept(Visitor& visitor) {
+    visitor.visit(this);
+}
+
+// --- NamespaceDeclaration ---
+NamespaceDeclaration::NamespaceDeclaration(SourceLocation loc, std::unique_ptr<Identifier> n, std::vector<DeclPtr> mems)
+    : Declaration(loc), name(std::move(n)), members(std::move(mems)) {}
+
+NodeType NamespaceDeclaration::getType() const {
+    return NodeType::NAMESPACE_DECLARATION;
+}
+
+std::string NamespaceDeclaration::toString() const {
+    std::stringstream ss;
+    ss << "namespace " << (name ? name->toString() : "") << " {\n";
+    for (const auto& member : members) {
+        if (member) {
+            std::string memberStr = member->toString();
+            std::string line;
+            std::stringstream memberStream(memberStr);
+            while (std::getline(memberStream, line)) {
+                ss << "  " << line << "\n";
+            }
+        }
+    }
+    ss << "}";
+    return ss.str();
+}
+
+void NamespaceDeclaration::accept(Visitor& visitor) {
+    visitor.visit(this);
+}
+
+// --- AssertStatement ---
+AssertStatement::AssertStatement(SourceLocation loc, ExprPtr cond, ExprPtr msg)
+    : Statement(loc), condition(std::move(cond)), message(std::move(msg)) {}
+
+NodeType AssertStatement::getType() const {
+    return NodeType::ASSERT_STATEMENT;
+}
+
+std::string AssertStatement::toString() const {
+    std::string str = "assert(" + (condition ? condition->toString() : "") + ")";
+    if (message) {
+        str += ", " + message->toString();
+    }
+    str += ";";
+    return str;
+}
+
+void AssertStatement::accept(Visitor& visitor) {
+    visitor.visit(this);
+}
 
 } // namespace ast
 } // namespace vyn

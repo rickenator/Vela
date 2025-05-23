@@ -39,10 +39,12 @@ llvm_map_components_to_libnames(LLVM_LIBS
   BitWriter
   IPO
   TransformUtils
-  ExecutionEngine
-  MCJIT
+  ExecutionEngine  # Legacy JIT support
+  MCJIT            # Older JIT API
+  OrcJIT           # Modern JIT API
+  JITLink          # Helper for OrcJIT
   Object
-  X86
+  X86CodeGen       # X86 backend (was X86)
   RuntimeDyld
   X86AsmParser
 )
@@ -81,12 +83,15 @@ set(VRE_SOURCES
     src/vre/llvm/cgen_expr.cpp
     src/vre/llvm/cgen_decl.cpp
     src/vre/llvm/cgen_stmt.cpp
+    src/vre/llvm/cgen_unimplemented.cpp
+    src/vre/llvm/cgen_helpers.cpp
+    src/vre/llvm/llvm_codegen_stubs.cpp
 )
 
 # VRE headers
 set(VRE_HEADERS
     include/vyn/vre/value.hpp
-    include/vyn/vre/semantic.hpp
+    include/vyn/semantic.hpp
     include/vyn/vre/memory.hpp
     include/vyn/vre/runtime_types.hpp
     include/vyn/vre/llvm/codegen.hpp
