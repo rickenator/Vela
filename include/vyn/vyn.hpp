@@ -47,7 +47,7 @@ path                   ::= IDENTIFIER { ('::' | '.') IDENTIFIER } // Allow . as 
 class_declaration      ::= [ 'pub' ] [ 'template' '<' type_parameter_list '>' ] 'class' IDENTIFIER [ 'extends' type ] [ 'implements' type_list ] '{' { class_member } '}'
 class_member           ::= field_declaration | method_declaration | constructor_declaration
 field_declaration      ::= [ 'pub' ] ( 'var' | 'const' ) IDENTIFIER ':' type [ '=' expression ] [';'] // Changed 'let' to 'var'
-method_declaration     ::= [ 'pub' ] [ 'static' ] [ 'template' '<' type_parameter_list '>' ] [ 'async' ] 'fn' IDENTIFIER '(' [ parameter_list ] ')' [ '->' type ] [ 'throws' type_list ] ( block_statement | '=>' expression [';'] ) // Added throws, expression body
+method_declaration     ::= [ 'pub' ] [ 'static' ] [ 'template' '<' type_parameter_list '>' ] [ 'async' ] 'fn' '<' type '>' IDENTIFIER '(' [ parameter_list ] ')' '->' ( block_statement | expression [';'] ) [ 'throws' type_list ] // Updated for fn<ReturnType> syntax with mandatory arrow separator
 constructor_declaration::= [ 'pub' ] 'new' [ template_parameters ] '(' [ parameter_list ] ')' [ 'throws' type_list ] ( block_statement | '=>' expression [';'] ) // Added throws, expression body
 
 struct_declaration     ::= [ 'pub' ] [ 'template' '<' type_parameter_list '>' ] 'struct' IDENTIFIER '{' { struct_field_declaration } '}'
@@ -58,14 +58,17 @@ enum_variant           ::= IDENTIFIER [ '(' type_list ')' ] [ '=' expression ] '
 
 impl_declaration       ::= [ 'template' '<' type_parameter_list '>' ] 'impl' type [ 'for' type ] '{' { method_declaration } '}'
 
-function_declaration   ::= [ 'pub' ] [ 'template' '<' type_parameter_list '>' ] [ 'async' ] 'fn' IDENTIFIER '(' [ parameter_list ] ')' [ '->' type ] [ 'throws' type_list ] ( block_statement | '=>' expression [';'] | statement ) // Added throws, expression body, or single statement body
+function_declaration   ::= [ 'pub' ] [ 'template' '<' type_parameter_list '>' ] [ 'async' ] 'fn' '<' type '>' IDENTIFIER '(' [ parameter_list ] ')' '->' ( block_statement | expression [';'] | statement ) [ 'throws' type_list ] // Updated for fn<ReturnType> syntax with mandatory arrow separator
 
 trait_declaration      ::= [ 'pub' ] 'template' IDENTIFIER [ template_parameters ] '{' { method_signature } '}' // For template Comparable
-method_signature       ::= [ 'async' ] 'fn' IDENTIFIER '(' [ parameter_list ] ')' [ '->' type ] [ 'throws' type_list ] ';'
+method_signature       ::= [ 'async' ] 'fn' '<' type '>' IDENTIFIER '(' [ parameter_list ] ')' '->' ';' [ 'throws' type_list ] // Updated for fn<ReturnType> syntax
 
 
-variable_declaration   ::= [ 'pub' ] 'var' IDENTIFIER [ ':' type ] [ '=' expression ] [';'] // Changed 'let' to 'var', semicolon optional
-constant_declaration   ::= [ 'pub' ] 'const' IDENTIFIER ':' type '=' expression [';'] // Semicolon optional
+variable_declaration   ::= [ 'pub' ] 'var' '<' type '>' IDENTIFIER [ '=' expression ] [';'] // Standard generic-angled declaration syntax
+                        | [ 'pub' ] type IDENTIFIER [ '=' expression ] [';'] // Relaxed shorthand syntax
+                        | [ 'pub' ] 'auto' IDENTIFIER '=' expression [';'] // Type inference syntax
+constant_declaration   ::= [ 'pub' ] 'const' '<' type '>' IDENTIFIER [ '=' expression ] [';'] // Standard generic-angled constant syntax
+                        | [ 'pub' ] 'const' type IDENTIFIER [ '=' expression ] [';'] // Relaxed shorthand syntax
 
 type_alias_declaration ::= [ 'pub' ] 'type' IDENTIFIER [ template_parameters ] '=' type [';'] // Semicolon optional
 
@@ -77,7 +80,8 @@ type_bounds            ::= type { '+' type }
 template_parameters    ::= '<' type_parameter_list '>'
 
 parameter_list         ::= parameter { ',' parameter }
-parameter              ::= IDENTIFIER ':' type [ '=' expression ] // Mutability via type e.g. &T, &const T
+parameter              ::= ('var' | 'const') '<' type '>' IDENTIFIER [ '=' expression ] // Standard parameter syntax
+                        | [ 'const' ] type IDENTIFIER [ '=' expression ] // Relaxed parameter syntax (shorthand)
 
 type_list              ::= type { ',' type }
 
@@ -209,7 +213,7 @@ OwnershipWrapper       ::= 'my' | 'our' | 'their' | 'ptr'
 
 ArrayType              ::= '[' Type [ ';' Expression ] ']' // e.g., [Int], [Int; 5]
 TupleType              ::= '(' [ Type { ',' Type } [ ',' ] ] ')' // e.g., (Int, String)
-FunctionType           ::= [ 'async' ] 'fn' '(' [ Type { ',' Type } ] ')' [ '->' Type ] [ 'throws' TypeList ]
+FunctionType           ::= [ 'async' ] 'fn' '<' Type '>' '(' [ Type { ',' Type } ] ')' '->' [ 'throws' TypeList ] // Updated for fn<ReturnType> syntax
 
 // Path and Arguments (mostly from old EBNF, ensure compatibility)
 path                   ::= IDENTIFIER { ('::' | '.') IDENTIFIER }
@@ -217,9 +221,10 @@ type_arguments         ::= '<' type_argument_list '>'
 type_argument_list     ::= type_argument { ',' type_argument }
 type_argument          ::= Type | Expression // For const generics
 
-// Borrow Expression (NEW - based on mem_RFC.md)
+// Borrowing Intrinsics (shorthand calls)
+// Parsed as regular call_expressions for borrow/view
 BorrowExpr             ::= 'borrow' '(' Expression ')'
-                         | 'borrow_mut' '(' Expression ')'
+                         | 'view' '(' Expression ')'
 
 
 // Note: The following old type productions are replaced or integrated above:

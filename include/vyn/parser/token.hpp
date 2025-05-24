@@ -28,6 +28,7 @@ enum class TokenType {
     KEYWORD_BORROW, KEYWORD_VIEW, // Changed from BORROW_MUT
     KEYWORD_NIL, // Added for nil literal
     KEYWORD_UNSAFE, // Added for unsafe blocks
+    KEYWORD_AUTO, // Added for auto type inference
 
     // Operators
     PLUS, MINUS, MULTIPLY, DIVIDE, MODULO, EQ, EQEQ, NOTEQ, LT, GT, LTEQ, GTEQ,

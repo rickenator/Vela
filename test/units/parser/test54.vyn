@@ -1,0 +1,13 @@
+// filepath: /home/rick/Projects/Vyn/test/units/extracted/test54.vyn
+// @test: Codegen: All pointer intrinsics used together in unsafe block
+// @description: Extracted from tests.cpp - Codegen: All pointer intrinsics used together in unsafe block
+// @category: parser
+// @expect: pass
+// @parse-only: true
+// @expect-output: n/a
+// @expect-error: n/a
+// @expect-return: n/a
+
+    std::string source = R"(
+fn<Void> main() -> -> Int {
+    var<Int> data = 25;

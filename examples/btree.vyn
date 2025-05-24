@@ -3,19 +3,19 @@
 
 // Assume a Comparable trait for keys
 template Comparable
-  fn lt(self: view Self, other: their<Self const>) -> Bool 
-  fn eq(self: view Self, other: their<Self const>) -> Bool 
+  fn<Bool> lt(const<Self> self, const<their<Self const>> other) -> 
+  fn<Bool> eq(const<Self> self, const<their<Self const>> other) -> 
 
 // B-tree template parameterized by key type K, value type V, and order M
 template BTree<K: Comparable, V, M: UInt> {
   class Node {
-    var keys: [K; M-1]
-    var values: [V; M-1]
-    var children: [my<Node>; M]
-    var num_keys: UInt
-    var is_leaf: Bool
+    var<[K; M-1]> keys
+    var<[V; M-1]> values
+    var<[my<Node>; M]> children
+    var<UInt> num_keys
+    var<Bool> is_leaf
 
-    fn new(is_leaf_param: Bool) -> Node { 
+    fn<Node> new(var<Bool> is_leaf_param) -> { 
       Node {
         keys = [K; M-1](), 
         values = [V; M-1](), 
@@ -26,22 +26,22 @@ template BTree<K: Comparable, V, M: UInt> {
     }
   }
 
-  var root: my<Node>
-  var size: UInt
+  var<my<Node>> root
+  var<UInt> size
 
-  fn new() -> BTree<K, V, M>
-    const root_node = make_my(Node::new(true)) 
+  fn<BTree<K, V, M>> new() -> 
+    const<my<Node>> root_node = make_my(Node::new(true)) 
     BTree { root: root_node, size: 0 }
 
-  fn search(self: view Self, key: K) -> Maybe<V> {
+  fn<Maybe<V>> search(const<Self> self, var<K> key) -> {
     search_node(view self.root, key)
   }
 
-  fn search_node(node: their<Node const>, key: K) -> Maybe<V> {
+  fn<Maybe<V>> search_node(const<their<Node const>> node, var<K> key) -> {
     if node.num_keys == 0 {
       return None
     }
-    const idx = find_key_index(node, key)
+    const<UInt> idx = find_key_index(node, key)
     if idx < node.num_keys && node.keys[idx].eq(view key) { 
       if node.is_leaf {
         return Some(node.values[idx])
@@ -54,9 +54,9 @@ template BTree<K: Comparable, V, M: UInt> {
     return if node.children[idx] == nil { None } else { search_node(view node.children[idx], key) }
   }
 
-  fn insert(self: borrow Self, key: K, value: V) {
+  fn<Void> insert(var<Self> self, var<K> key, var<V> value) -> {
     if self.root.num_keys == M-1 {
-      const new_root_node = make_my(Node::new(false))
+      const<my<Node>> new_root_node = make_my(Node::new(false))
       new_root_node.children[0] = self.root 
       self.root = new_root_node 
       split_node(borrow self.root, 0)
@@ -65,8 +65,8 @@ template BTree<K: Comparable, V, M: UInt> {
     self.size += 1
   }
 
-  fn insert_non_full(node: their<Node>, key: K, value: V) { 
-    var idx = find_key_index(view node, key)
+  fn<Void> insert_non_full(var<their<Node>> node, var<K> key, var<V> value) -> { 
+    var<UInt> idx = find_key_index(view node, key)
     if node.is_leaf {
       for i in (idx..node.num_keys).rev() {
         node.keys[i+1] = node.keys[i]
@@ -88,12 +88,12 @@ template BTree<K: Comparable, V, M: UInt> {
     }
   }
 
-  fn split_node(parent: their<Node>, child_idx: UInt) {
-    const full_child = borrow parent.children[child_idx]
+  fn<Void> split_node(var<their<Node>> parent, var<UInt> child_idx) -> {
+    const<their<Node>> full_child = borrow parent.children[child_idx]
     if full_child == nil { return } 
 
-    const mid_key_index = (M-1) / 2
-    const new_sibling = make_my(Node::new(full_child.is_leaf))
+    const<UInt> mid_key_index = (M-1) / 2
+    const<my<Node>> new_sibling = make_my(Node::new(full_child.is_leaf))
 
     var j = 0
     for i in (mid_key_index + 1)..(M-1) {
@@ -112,8 +112,8 @@ template BTree<K: Comparable, V, M: UInt> {
       }
     }
     
-    const median_key = full_child.keys[mid_key_index]
-    const median_value = if full_child.is_leaf { Some(full_child.values[mid_key_index]) } else { None }
+    const<K> median_key = full_child.keys[mid_key_index]
+    const<Maybe<V>> median_value = if full_child.is_leaf { Some(full_child.values[mid_key_index]) } else { None }
 
     full_child.num_keys = mid_key_index
 
@@ -133,8 +133,8 @@ template BTree<K: Comparable, V, M: UInt> {
     parent.num_keys += 1
   }
 
-  fn find_key_index(node: their<Node const>, key: K) -> UInt {
-    var idx: UInt = 0
+  fn<UInt> find_key_index(const<their<Node const>> node, var<K> key) -> {
+    var<UInt> idx = 0
     while idx < node.num_keys && node.keys[idx].lt(view key) {
       idx += 1
     }
@@ -143,8 +143,8 @@ template BTree<K: Comparable, V, M: UInt> {
 }
 
 // Example usage
-fn main()
-  var tree = BTree<Int, String, 3>::new()
+fn<Void> main() -> {
+  var<BTree<Int, String, 3>> tree = BTree<Int, String, 3>::new()
   tree.insert(10, "ten")
   tree.insert(20, "twenty")
   tree.insert(5, "five")

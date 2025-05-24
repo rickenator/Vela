@@ -1,0 +1,12 @@
+// @test: Parser handles indentation-based function
+// @description: Extracted from tests.cpp - Parser handles indentation-based function
+// @category: parser
+// @expect: pass
+// @parse-only: true
+// @expect-output: n/a
+// @expect-error: n/a
+// @expect-return: n/a
+
+fn<Int> example() ->
+    const<Int> x = 10
+    return x

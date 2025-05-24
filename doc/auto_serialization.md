@@ -23,11 +23,11 @@ This enables scripts and API-style binaries to return structured data without ma
 
 ```vyn
 struct User {
-  var id: Int
-  var name: String
+  var<Int> id
+  var<String> name
 }
 
-fn main() -> User {
+fn<User> main() -> {
   return User { id: 1, name: "Rick" }
 }
 // Runner prints: {"id":1,"name":"Rick"}
@@ -40,10 +40,10 @@ When you need to adjust the JSON shape:
 ```vyn
 struct Secret {
   #[jsonIgnore]
-  var token: String        // omitted from JSON output
+  var<String> token        // omitted from JSON output
 
   #[jsonName="user_name"]
-  var name: String         // renamed key in JSON
+  var<String> name         // renamed key in JSON
 }
 
 // Hand-roll if you need full control:

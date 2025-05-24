@@ -1,0 +1,13 @@
+// filepath: /home/rick/Projects/Vyn/test/units/extracted/test34.vyn
+// @test: Codegen: Pointer dereference assignment
+// @description: Extracted from tests.cpp - Codegen: Pointer dereference assignment
+// @category: parser
+// @expect: pass
+// @parse-only: true
+// @expect-output: n/a
+// @expect-error: n/a
+// @expect-return: n/a
+
+    std::string source = R"(
+fn main() -> Int {
+    var<Int> x = 42;

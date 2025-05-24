@@ -1,0 +1,10 @@
+// @test: Parser handles binary expression in array size
+// @description: Extracted from tests.cpp - Parser handles binary expression in array size
+// @category: parser
+// @expect: pass
+// @parse-only: true
+// @expect-output: n/a
+// @expect-error: n/a
+// @expect-return: n/a
+
+var<[Int; N-1]> arr;

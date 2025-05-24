@@ -1,0 +1,16 @@
+// @test: Parser handles try/catch/finally
+// @description: Extracted from tests.cpp - Parser handles try/catch/finally
+// @category: parser
+// @expect: pass
+// @parse-only: true
+// @expect-output: n/a
+// @expect-error: n/a
+// @expect-return: n/a
+
+fn<Void> example() ->
+    try
+        const<Int> x = 1;
+    catch e
+        const<Int> y = 2;
+    finally
+        const<Int> z = 3;

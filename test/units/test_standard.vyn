@@ -1,0 +1,14 @@
+// filepath: test/units/test_standard.vyn
+// @test: Standard Syntax
+// @description: Test file using only standard variable declaration syntax (not relaxed)
+// @category: parser, syntax
+// @expect: pass
+// @parse-only: true
+// @expect-output: n/a
+// @expect-error: n/a
+// @expect-return: 42
+
+fn<Int> main() -> {
+    var<Int> x = 42;
+    return x;
+}

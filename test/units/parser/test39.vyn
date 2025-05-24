@@ -1,0 +1,13 @@
+// filepath: /home/rick/Projects/Vyn/test/units/extracted/test39.vyn
+// @test: Codegen: addr(loc) and from(addr) round-trip in unsafe
+// @description: Extracted from tests.cpp - Codegen: addr(loc) and from(addr) round-trip in unsafe
+// @category: parser
+// @expect: pass
+// @parse-only: true
+// @expect-output: n/a
+// @expect-error: n/a
+// @expect-return: n/a
+
+    std::string source = R"(
+fn<Void> main() -> -> Int {
+    var<Int> x = 55;

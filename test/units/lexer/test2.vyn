@@ -1,0 +1,12 @@
+// @test: Lexer tokenizes brace-based function
+// @description: Extracted from tests.cpp - Lexer tokenizes brace-based function
+// @category: lexer
+// @expect: pass
+// @parse-only: true
+// @expect-output: n/a
+// @expect-error: n/a
+// @expect-return: n/a
+
+fn<Void> example() -> {
+    const<Int> x = 10;
+}

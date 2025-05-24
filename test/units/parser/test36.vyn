@@ -1,0 +1,13 @@
+// filepath: /home/rick/Projects/Vyn/test/units/extracted/test36.vyn
+// @test: Codegen: Multidimensional array assignment/access
+// @description: Extracted from tests.cpp - Codegen: Multidimensional array assignment/access
+// @category: parser
+// @expect: pass
+// @parse-only: true
+// @expect-output: n/a
+// @expect-error: n/a
+// @expect-return: n/a
+
+    std::string source = R"(
+fn<Void> main() -> -> Int {
+    var<[[Int> arr; 2]; 2] = [[1, 2], [3, 4]];

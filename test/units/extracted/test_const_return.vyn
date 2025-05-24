@@ -1,0 +1,13 @@
+// @test: Simple Function with const return
+// @description: Tests a function returning const value
+// @category: parser, syntax
+// @expect: pass
+// @parse-only: true
+// @expect-output: n/a
+// @expect-error: n/a
+// @expect-return: n/a
+
+fn<const<Int>> get_value() -> {
+    const<Int> x = 42
+    return x
+}

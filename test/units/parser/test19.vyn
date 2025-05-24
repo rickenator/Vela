@@ -1,0 +1,10 @@
+// @test: Parser handles declaration node kinds
+// @description: Extracted from tests.cpp - Parser handles declaration node kinds
+// @category: parser
+// @expect: pass
+// @parse-only: true
+// @expect-output: n/a
+// @expect-error: n/a
+// @expect-return: n/a
+
+template T { class C { fn<Void> f(x: their<T>) -> { } } } 

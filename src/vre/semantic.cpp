@@ -269,7 +269,16 @@ void SemanticAnalyzer::visit(ast::VariableDeclaration* node) {
     }
 
     if (currentScope->lookupDirect(node->id->name)) { 
-        addError("Redefinition of variable \\\"" + node->id->name + "\\\" in the same scope.", node->id.get());
+        addError("Redefinition of variable \"" + node->id->name + "\" in the same scope.", node->id.get());
+    }
+
+    // Enforce mandatory type annotation for var<T> and const<T>
+    if (!node->typeNode) {
+        if (node->isConst) {
+            addError("Missing type annotation on constant declaration '" + node->id->name + "'; expected const<T> name.", node);
+        } else {
+            addError("Missing type annotation on variable declaration '" + node->id->name + "'; expected var<T> name.", node);
+        }
     }
 
     if (node->typeNode) { // Changed from type to typeNode
@@ -278,21 +287,36 @@ void SemanticAnalyzer::visit(ast::VariableDeclaration* node) {
 
     if (node->init) { 
         node->init->accept(*this);
-        if (node->typeNode && expressionTypes.count(node->init.get())) { // Changed from type to typeNode
-            ast::TypeNode* varType = node->typeNode.get(); // Changed from type to typeNode
+        
+        // Handle type inference for auto variables
+        if (!node->typeNode && expressionTypes.count(node->init.get())) {
+            // Auto type inference - set the type based on initializer
+            ast::TypeNode* initType = expressionTypes[node->init.get()];
+            if (initType) {
+                node->typeNode = std::unique_ptr<ast::TypeNode>(initType->clone());
+            } else {
+                addError("Cannot infer type for 'auto' variable \\\"" + node->id->name + "\\\", initializer has no type", node);
+            }
+        }
+        
+        // Now check types match (for both explicit types and inferred types)
+        if (node->typeNode && expressionTypes.count(node->init.get())) {
+            ast::TypeNode* varType = node->typeNode.get();
             ast::TypeNode* initType = expressionTypes[node->init.get()];
             if (initType) { 
                 if (!areTypesCompatible(varType, initType)) { 
-                    // Corrected addError string
                     addError("Initializer type does not match variable type for \\\"" + node->id->name + "\\\". Expected " + varType->toString() + " but got " + initType->toString(), node);
                 }
             }
         }
+    } else if (!node->typeNode) {
+        // Auto variables must have an initializer for type inference
+        addError("'auto' variable \\\"" + node->id->name + "\\\" must have an initializer for type inference", node);
     }
     
-    ast::TypeNode* symbolType = node->typeNode ? node->typeNode.get() : nullptr; // Changed from type to typeNode
+    ast::TypeNode* symbolType = node->typeNode ? node->typeNode.get() : nullptr;
     if (!symbolType && node->init && expressionTypes.count(node->init.get())) {
-         symbolType = expressionTypes[node->init.get()];
+        symbolType = expressionTypes[node->init.get()];
     }
 
     SymbolInfo::Kind kind = SymbolInfo::Kind::Variable; 
@@ -406,7 +430,70 @@ void SemanticAnalyzer::visit(ast::TypeAliasDeclaration* node) {
 
 void SemanticAnalyzer::visit(ast::UnaryExpression* node) {}
 void SemanticAnalyzer::visit(ast::BinaryExpression* node) {}
-void SemanticAnalyzer::visit(ast::CallExpression* node) {}
+void SemanticAnalyzer::visit(ast::CallExpression* node) {
+    // Visit callee
+    if (node->callee) node->callee->accept(*this);
+    // Visit arguments
+    for (auto& arg : node->arguments) {
+        if (arg) arg->accept(*this);
+    }
+    // Handle borrow()/view() intrinsics
+    if (auto ident = dynamic_cast<ast::Identifier*>(node->callee.get())) {
+        const std::string& name = ident->name;
+        if (name == "borrow" || name == "view") {
+            // Must be used within unsafe block
+            if (!isInUnsafeBlock()) {
+                addError(name + "() can only be used inside an unsafe block", node);
+            }
+            if (node->arguments.size() != 1) {
+                addError(name + "() expects exactly one argument", node);
+                return;
+            }
+            ast::Expression* argExpr = node->arguments[0].get();
+            ast::TypeNode* argType = expressionTypes[argExpr];
+            if (!argType) {
+                addError("Cannot determine type of argument to " + name + "()", node);
+                return;
+            }
+            // Argument must be owned (my<T> or our<T>)
+            auto baseTypeName = dynamic_cast<ast::TypeName*>(argType);
+            if (!baseTypeName || baseTypeName->genericArgs.size() != 1 || 
+                (baseTypeName->identifier->name != "my" && baseTypeName->identifier->name != "our")) {
+                addError(name + "() argument must be an owned type my<T> or our<T>", node);
+            }
+            // Compute result type: their<T> for borrow, their<T const> for view
+            using ast::BorrowKind;
+            BorrowKind kind = (name == "borrow" ? BorrowKind::MUTABLE_BORROW : BorrowKind::IMMUTABLE_VIEW);
+            
+            // Clone inner type T
+            ast::TypeNodePtr innerType = baseTypeName->genericArgs[0]->clone();
+            
+            // For view, wrap T in const if necessary (represented as TypeName with " const" appended)
+            if (name == "view") {
+                // Create a new TypeName with " const" appended to the inner type's name
+                auto innerTypeName = dynamic_cast<ast::TypeName*>(innerType.get());
+                if (innerTypeName && innerTypeName->identifier) {
+                    std::string constTypeName = innerTypeName->identifier->name + " const";
+                    auto constIdentifier = std::make_unique<ast::Identifier>(node->loc, constTypeName);
+                    innerType = std::make_unique<ast::TypeName>(node->loc, std::move(constIdentifier), 
+                                                               std::move(innerTypeName->genericArgs));
+                }
+                // If not a TypeName, we might need different handling
+            }
+            
+            // Create their<T> TypeName
+            auto theirId = std::make_unique<ast::Identifier>(node->loc, "their");
+            std::vector<ast::TypeNodePtr> theirArgs;
+            theirArgs.push_back(std::move(innerType));
+            ast::TypeNode* resultType = new ast::TypeName(node->loc, std::move(theirId), std::move(theirArgs));
+            expressionTypes[node] = resultType;
+            node->type = std::shared_ptr<ast::TypeNode>(resultType->clone().release());
+            return;
+        }
+    }
+    // Fallback: default CallExpression analysis (no additional checks)
+    // ...existing code...
+}
 void SemanticAnalyzer::visit(ast::ArrayElementExpression* node) {}
 void SemanticAnalyzer::visit(ast::MemberExpression* node) {
     if (!node || !node->object || !node->property) {

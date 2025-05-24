@@ -1,0 +1,81 @@
+// Relaxed syntax examples for Vyn
+
+// Function with relaxed parameter syntax
+fn<Float> calculate_area(Float width, Float height) -> {
+    width * height
+}
+
+// Function with mixed parameter syntax
+fn<Int> process_data(var<String> data, const Int factor) -> {
+    var<Int> result = data.to_int() * factor
+    return result
+}
+
+// Demonstration of local variable declarations using relaxed syntax
+fn<Void> demo_local_vars() -> {
+    // Relaxed syntax for local variables
+    Int count = 5                  // Equivalent to var<Int> count = 5
+    String message = "Hello"       // Equivalent to var<String> message = "Hello"
+    Float pi                       // Equivalent to var<Float> pi (uninitialized)
+    pi = 3.14159                   // Later assignment
+    
+    // Immutable with relaxed syntax
+    const Bool flag = true         // Equivalent to const<Bool> flag = true
+    
+    // Type inference with 'auto'
+    auto sum = count + 10          // Inferred as Int
+    auto greeting = message + "!"  // Inferred as String
+    
+    // Complex types still work with relaxed syntax
+    my<[Int]> numbers = [1, 2, 3, 4, 5]
+    their<String> borrowed_msg = borrow(message)
+    
+    println("Count: " + count.to_string())
+    println("Message: " + message)
+    println("Pi: " + pi.to_string())
+    println("Sum: " + sum.to_string())
+}
+
+// Function with ownership types using relaxed syntax
+fn<Int> sum_array(my<[Int]> array) -> {
+    var<Int> total = 0
+    for i in 0..array.len() {
+        total += array[i]
+    }
+    return total
+}
+
+// Function with ownership types using standard syntax
+fn<Int> product_array(var<my<[Int]>> array) -> {
+    var<Int> total = 1
+    for i in 0..array.len() {
+        total *= array[i]
+    }
+    return total
+}
+
+// Main function using relaxed syntax for locals
+fn<Int> main() -> {
+    // Call functions with various parameter styles
+    Float area = calculate_area(5.0, 10.0)
+    println("Area: " + area.to_string())
+    
+    Int result = process_data("100", 5)
+    println("Result: " + result.to_string())
+    
+    // Demonstrate local variable syntax
+    demo_local_vars()
+    
+    // Test ownership types
+    my<[Int]> values = [1, 2, 3, 4, 5]
+    Int total = sum_array(values)  // Ownership moves to sum_array
+    
+    // Need to create a new array since values was moved
+    my<[Int]> more_values = [2, 3, 4]
+    Int product = product_array(more_values)
+    
+    println("Total: " + total.to_string())
+    println("Product: " + product.to_string())
+    
+    return 0
+}

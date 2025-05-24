@@ -1,0 +1,16 @@
+// filepath: /home/rick/Projects/Vyn/test/units/extracted/test38.vyn
+// @test: Semantic: from(addr) only allowed in unsafe
+// @description: Extracted from tests.cpp - Semantic: from(addr) only allowed in unsafe
+// @category: parser
+// @expect: pass
+// @parse-only: true
+// @expect-output: n/a
+// @expect-error: n/a
+// @expect-return: n/a
+
+    std::string source_ok = R"(
+fn main() -> Int{
+    var<Int> addr = 0x1234;
+    std::string source_err = R"(
+fn main() -> Int {
+    var<Int> a = 0x1234;

@@ -299,9 +299,9 @@ Unsafe blocks are used to contain low-level memory operations that could be unsa
 Example:
 ```vyn
 unsafe {
-    var p: loc<Int> = loc(x);
+    var<loc<Int>> p = loc(x);
     at(p) = 99;  // Modify the value at the pointer location
-    var q = at(p); // Read the value at the pointer location
+    var<Int> q = at(p); // Read the value at the pointer location
 }
 ```
 

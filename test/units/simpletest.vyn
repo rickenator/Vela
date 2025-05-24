@@ -1,0 +1,4 @@
+fn<Int> main() -> {
+    var<Int> x = 55;
+    return x;
+}

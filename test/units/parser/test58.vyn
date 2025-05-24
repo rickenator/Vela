@@ -1,0 +1,16 @@
+// filepath: /home/rick/Projects/Vyn/test/units/extracted/test58.vyn
+// @test: Semantic: from<Type>(expr) type mismatch between Type and expression
+// @description: Extracted from tests.cpp - Semantic: from<Type>(expr) type mismatch between Type and expression
+// @category: parser
+// @expect: pass
+// @parse-only: true
+// @expect-output: n/a
+// @expect-error: n/a
+// @expect-return: n/a
+
+    std::string source = R"(
+struct MyData { val: Int }
+struct OtherData { name: String }
+
+fn<Void> main() -> -> Int {
+    var<Int> md_addr = 0xCAFE; // Some address

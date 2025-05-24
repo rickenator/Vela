@@ -1,141 +1,193 @@
-# Vyn Intrinsics
+# Vyn Intrinsics & Core Syntax
 
-This document describes the intrinsic functions and operations in the Vyn programming language. Intrinsics are special functions that are recognized and handled directly by the compiler, often providing functionality that cannot be expressed in standard Vyn code.
+This document covers Vyn’s built-in intrinsics, variable declaration syntax (including type inference), and function declaration syntax, all aligned with the `<T>`‑first style.
 
-## 1. Overview
+---
 
-Intrinsics in Vyn serve several purposes:
+## 1. Variable & Constant Declarations
 
-1. **Memory Operations**: Low-level memory manipulation (`loc`, `at`, `from`)
-2. **Raw Performance**: Operations that need direct mapping to hardware instructions
-3. **Special Semantics**: Operations with behavior that can't be represented in regular Vyn code
+Vyn uses two primary declaration forms:
 
-## 1.1 Reserved Identifiers
-
-The following identifiers are reserved for intrinsic functions and should not be used as variable, function, or parameter names:
-
-- `addr` - Used for the address-of intrinsic function
-- `at` - Used for pointer dereferencing
-- `loc` - Used for pointer creation
-- `from` - Used for pointer type conversion
-
-Using these names as variables or function names can lead to ambiguity and compilation errors, especially when they appear in contexts where the compiler might interpret them as intrinsic function calls.
-
-## 2. Memory Intrinsics
-
-These intrinsics provide low-level memory manipulation capabilities. They must be used within unsafe blocks.
-
-### 2.1. `loc<T>(expr)`
-
-Creates a pointer to a variable.
-
-- **Syntax**: `loc(expr)` or `loc<T>(expr)`
-- **Return Type**: `loc<T>` where `T` is the type of `expr`
-- **AST Representation**:
-  - Simple case: `CallExpression` with identifier "loc"
-  - Generic case: `ConstructionExpression` with a `GenericInstanceTypeNode` for "loc"
-- **LLVM Implementation**: Generates an LLVM instruction to compute the address of the argument
-
-Example:
-```vyn
-var x: Int = 42;
-unsafe {
-    var p: loc<Int> = loc(x);  // Points to x
-}
+```ebnf
+Declaration ::= "var" "<" Type ">" Identifier [ "=" Expression ]
+              | "var" "auto" Identifier "=" Expression
+              | "const" "<" Type ">" Identifier [ "=" Expression ]
 ```
 
-### 2.2. `at(pointer)`
+- **`var<T> name [= expr]`**  
+  Mutable binding of type `T`.  
+- **`var auto name = expr`**  
+  Mutable binding with type `T` inferred from `expr`.  
+- **`const<T> name [= expr]`**  
+  Immutable binding of type `T`.  
 
-Dereferences a pointer for reading or writing.
+> **Note:** `const auto` is not supported; use explicit `const<T>` for immutable bindings.
 
-- **Syntax**: `at(pointer)`
-- **Return Type**: The pointee type of `pointer`
-- **AST Representation**: `CallExpression` with identifier "at"
-- **LLVM Implementation**:
-  - When used on RHS: Generates an LLVM load instruction
-  - When used on LHS: Returns the pointer itself, allowing a store operation
+### Examples
 
-Examples:
+```vyn
+var<Int> x             // mutable Int, uninitialized
+var<Int> y = 42        // mutable Int, initialized
+
+var auto tree = BTree<Int, String, 3>::new()
+// `tree` inferred as BTree<Int, String, 3>
+
+const<String> s = "hello"  // immutable String
+```
+
+Ownership-aware declarations:
+
+```vyn
+var<my<Task>> task = my<Task>(Task { id: 1, payload: "foo" })
+var<our<Config>> cfg  = our<Config>(Config { debug: true })
+var<their<Foo>> b     = their<Foo>(owner)       // mutable borrow
+var<their<Foo const>> v = their<Foo const>(owner)  // immutable borrow
+```
+
+Pointer declarations (inside `unsafe`):
+
 ```vyn
 unsafe {
-    var p: loc<Int> = loc(x);
-    var y: Int = at(p);  // Reading (load)
-    at(p) = 99;         // Writing (store)
+  var<loc<Int>> p = loc(x)
+  at(p) = 99
 }
 ```
 
-### 2.3. `from<loc<T>>(expr)`
+---
 
-Converts between pointer types or from integer to a typed pointer.
+## 2. Function Declaration Syntax
 
-- **Syntax**: `from<loc<T>>(expr)`
-- **Return Type**: `loc<T>`
-- **AST Representation**: `ConstructionExpression` with a `GenericInstanceTypeNode` for "from"
-- **LLVM Implementation**: Generates appropriate LLVM pointer cast or integer-to-pointer conversion
+Functions follow a `<ReturnType>`‑first style, with a mandatory `->` separator. Braces are optional for single-expression bodies.
 
-Example:
+```ebnf
+FunctionDecl ::= "fn" "<" Type ">" Identifier "(" ParamList ")" "->" Body
+
+ParamList    ::= [ Param { "," Param } ]
+Param        ::= ("var" | "const") "<" Type ">" Identifier
+
+Body         ::= Block
+               | Expression
+
+Block        ::= "{" Statement* [ Expression ] "}"
+Expression   ::= <any single Vyn expression>
+```
+
+- **Return type**: declared in `<Type>` after `fn`.  
+- **Parameters**: `var<T>` or `const<T>` before each name.  
+- **`->`**: mandatory separator between signature and body.  
+- **Braces** `{}` optional only for single-expression bodies.
+
+### Examples
+
 ```vyn
-unsafe {
-    var addr: Int = 0x12345678;
-    var p: loc<Int> = from<loc<Int>>(addr);
+class Node {
+  var<Bool> is_leaf
+
+  // Constructor with block body
+  fn<Node> new(const<Bool> is_leaf_param) -> {
+    Node { is_leaf: is_leaf_param }
+  }
+
+  // Concise single-expression function
+  fn<Int> double(var<Int> x) -> x * 2
 }
 ```
 
-## 3. Future Intrinsics (Planned)
+---
 
-These intrinsics are planned for future implementation:
+## 3. Intrinsics Overview
 
-### 3.1. `sizeof<T>()`
+Intrinsics are compiler-handled operations, split into **stable** (Sections 4–6) and **proposed/experimental** (Section 7).
 
-Returns the size of a type in bytes.
+### 3.1 Reserved Keywords
 
-- **Syntax**: `sizeof<T>()`
-- **Return Type**: `UInt`
+These names are reserved and cannot be used as identifiers:
 
-Example:
+- **Declarations**: `var`, `auto`, `const`  
+- **Ownership & borrowing**: `my`, `our`, `their`, `borrow`, `view`  
+- **Pointer & address**: `loc`, `at`, `addr`, `from`  
+- **Type metadata**: `sizeof`, `alignof`, `offsetof`  
+- **Visibility/macros**: `import`, `smuggle`, `share`
+
+---
+
+## 4. Ownership Intrinsics
+
+### 4.1 Core Wrappers
+
 ```vyn
-var size: UInt = sizeof<Int>();  // Returns size of Int in bytes
+fn my<T>(value: T) -> my<T>
+fn our<T>(value: T) -> our<T>
+fn their<T>(owner: my<T> | our<T>) -> their<T>
+fn their<T const>(owner: my<T> | our<T>) -> their<T const>
 ```
 
-### 3.2. `alignof<T>()`
+- **`my<T>(value)`**: wrap `value` in a unique-owned `my<T>`.  
+- **`our<T>(value)`**: wrap `value` in a shared-owned `our<T>`.  
+- **`their<T>(owner)`**: create a mutable borrow `their<T>` of `owner`.  
+- **`their<T const>(owner)`**: create an immutable borrow `their<T const>` of `owner`.
 
-Returns the alignment requirement of a type in bytes.
+### 4.2 Shorthand Borrowing
 
-- **Syntax**: `alignof<T>()`
-- **Return Type**: `UInt`
+For convenience, the compiler provides **inferred** shorthand intrinsics:
 
-Example:
 ```vyn
-var alignment: UInt = alignof<Double>();
+fn borrow(owner) -> their<T>
+fn view(owner)   -> their<T const>
 ```
 
-### 3.3. `offsetof<T>(field)`
+- **`borrow(owner)`** infers `T` from `owner` and returns `their<T>`.  
+- **`view(owner)`** infers `T` from `owner` and returns `their<T const>`.
 
-Returns the byte offset of a field within a struct.
+---
 
-- **Syntax**: `offsetof<MyStruct>("fieldName")`
-- **Return Type**: `UInt`
+## 5. Memory Intrinsics (`unsafe` required)
 
-Example:
 ```vyn
-struct Point {
-    var x: Int;
-    var y: Int;
-}
-
-var offset: UInt = offsetof<Point>("y");  // Returns offset of y field
+unsafe fn loc<T>(expr: T) -> loc<T>
+unsafe fn at<T>(pointer: loc<T>) -> T
+unsafe fn addr<T>(pointer: loc<T>) -> Int64
+unsafe fn from<P>(addr: Int64) -> P
 ```
 
-## 4. Implementation Notes
+- **`loc<T>(expr)`**: address‑of a value → `loc<T>`.  
+- **`at<T>(pointer)`**: dereference pointer → `T` (l-value/r-value).  
+- **`addr<T>(pointer)`**: pointer → raw `Int64`.  
+- **`from<P>(addr)`**: raw `Int64` → pointer `P`.
 
-Intrinsics are implemented in the compiler as special cases in the AST visitor implementation. During code generation, intrinsic calls are recognized and expanded into the appropriate LLVM IR instructions rather than generating a regular function call.
+---
 
-The intrinsic implementation can be found in:
-- AST handling: `src/vre/llvm/cgen_expr.cpp`
-- Semantic analysis: `src/vre/semantic.cpp`
+## 6. Type Metadata Intrinsics (safe)
 
-## 5. Usage Guidelines
+```vyn
+fn sizeof<T>() -> UInt
+fn alignof<T>() -> UInt
+fn offsetof<T>(field: identifier) -> UInt
+```
 
-- **Memory intrinsics** should only be used within unsafe blocks
-- Intrinsics should be considered implementation details that might change
-- When possible, prefer safe abstractions provided by the standard library over direct intrinsic use
+- **`sizeof<T>()`**: size of `T` in bytes.  
+- **`alignof<T>()`**: alignment of `T`.  
+- **`offsetof<T>(field)`**: byte offset of `field` in `T`.
+
+---
+
+## 7. Proposed/Experimental Intrinsics
+
+```vyn
+fn offset<T>(ptr: loc<T>, count: Int) -> loc<T>
+fn is_null<T>(ptr: loc<T>) -> Bool
+fn aligned<T>(ptr: loc<T>) -> Bool
+fn mem_copy(dst: loc<UInt8>, src: loc<UInt8>, n: UInt) -> Void
+fn mem_set(ptr: loc<UInt8>, value: UInt8, n: UInt) -> Void
+// Atomic & volatile operations
+```
+
+---
+
+## 8. Usage Guidelines
+
+1. **Declarations**: choose explicit (`var<T>`) or inferred (`var auto`).  
+2. **Functions**: return in `<Type>`, arrow mandatory, braces optional for single expressions.  
+3. **Ownership**: use `my<T>`, `our<T>`, `their<T>`, with optional `borrow()`/`view()` shorthand.  
+4. **Intrinsics**: memory ops only in `unsafe`, metadata always safe.  
+5. **Stability**: Sections 4–6 are stable; Section 7 is experimental.

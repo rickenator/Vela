@@ -1,0 +1,13 @@
+//# EXPECTED ERROR: borrow() argument must be an owned type my<T> or our<T>
+
+fn<Int> main() -> {
+    var<Int> x = 10; // Not an owned type (missing my<> or our<>)
+    
+    unsafe {
+        // Using borrow on non-owned type should fail
+        var<their<Int>> b = borrow(x);
+        b = 20;
+    }
+    
+    return x;
+}

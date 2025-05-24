@@ -1,0 +1,13 @@
+// filepath: /home/rick/Projects/Vyn/test/units/extracted/test35.vyn
+// @test: Codegen: Member access assignment
+// @description: Extracted from tests.cpp - Codegen: Member access assignment
+// @category: parser
+// @expect: pass
+// @parse-only: true
+// @expect-output: n/a
+// @expect-error: n/a
+// @expect-return: n/a
+
+    std::string source = R"(
+class Point {
+    var<Int> x;

@@ -1,0 +1,62 @@
+// filepath: test/units/test_relaxed_local.vyn
+// @test: Local Variable Relaxed Syntax
+// @description: Tests that relaxed syntax works for local variable declarations
+// @category: parser, syntax
+// @expect: pass
+// @parse-only: true
+// @expect-output: n/a
+// @expect-error: n/a
+// @expect-return: n/a
+
+fn<Int> test_relaxed_local_variables() -> {
+    // Standard syntax
+    var<Int> x1 = 10;
+    const<Int> y1 = 20;
+    
+    // Relaxed syntax
+    Int x2 = 30;
+    const Int y2 = 40;
+    
+    // Type inference with auto
+    auto a1 = 50;
+    
+    // Collection types with appropriate syntax
+    var<[Int]> numbers = [1, 2, 3];
+    // Using appropriate generic types
+    var<Dict<String, Int>> scores;
+    
+    // Function calls with arguments
+    function_with_args(10, "Hello");
+    
+    // In a block
+    {
+        Int z = 60;
+        const Int w = 70;
+    }
+    
+    // In control structures
+    if (true) {
+        Int in_if = 80;
+    }
+    
+    for (Int i = 0; i < 10; i = i + 1) {
+        Int in_loop = i;
+    }
+    
+    // With complex expressions
+    Int calculated = x1 + y1 * 2;
+    
+    // Return using a relaxed syntax variable
+    return x2 + y2;
+}
+
+// Helper functions for the test
+fn<Void> function_with_args(Int x, const String s) -> {
+    println(s + ": " + x);  // Auto-serialization handles conversion
+}
+
+fn<Int> main() -> {
+    Int result = test_relaxed_local_variables();
+    println("Result: " + result);  // Auto-serialization handles conversion
+    return 0;
+}

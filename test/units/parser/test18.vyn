@@ -1,0 +1,11 @@
+// @test: Parser handles VarDecl with generic type
+// @description: Extracted from tests.cpp - Parser handles VarDecl with generic type
+// @category: parser
+// @expect: pass
+// @parse-only: true
+// @expect-output: n/a
+// @expect-error: n/a
+// @expect-return: n/a
+
+var<my<T>> x;
+fn<Void> test() -> { if (a < b.c) { } }

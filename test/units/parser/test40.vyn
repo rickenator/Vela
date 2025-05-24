@@ -1,0 +1,14 @@
+// filepath: /home/rick/Projects/Vyn/test/units/extracted/test40.vyn
+// @test: Parser: Basic unsafe block
+// @description: Extracted from tests.cpp - Parser: Basic unsafe block
+// @category: parser
+// @expect: pass
+// @parse-only: true
+// @expect-output: n/a
+// @expect-error: n/a
+// @expect-return: n/a
+
+    std::string source = R"(
+fn<Void> main() -> -> Int{
+    unsafe {
+        var<Int> x = 1;

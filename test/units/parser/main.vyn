@@ -1,0 +1,23 @@
+// @test: Parser handles main.vyn try/catch/finally
+// @description: Extracted from tests.cpp - Parser handles main.vyn try/catch/finally
+// @category: parser
+// @expect: pass
+// @parse-only: true
+// @expect-output: n/a
+// @expect-error: n/a
+// @expect-return: n/a
+
+fn<Void> main() -> {
+    try {
+        var<Int> squares = [x * x for x in 0..10];
+        const<Int> v1 = Vector::new(1.0, 2.0);
+        const<Int> v2 = Vector::new(3.0, 4.0);
+        const<Int> sum = v1 + v2;
+    } catch (e: NetworkError) {
+        println("Network error: {}", e.message);
+    } catch (e: IOError) {
+        println("IO error: {}", e.message);
+    } finally {
+        println("Cleanup complete");
+    }
+}

@@ -1,0 +1,13 @@
+// filepath: /home/rick/Projects/Vyn/test/units/extracted/test51.vyn
+// @test: Codegen: 'loc()' and 'at()' for write in unsafe block
+// @description: Extracted from tests.cpp - Codegen: 'loc()' and 'at()' for write in unsafe block
+// @category: parser
+// @expect: pass
+// @parse-only: true
+// @expect-output: n/a
+// @expect-error: n/a
+// @expect-return: n/a
+
+    std::string source = R"(
+fn<Void> main() -> -> Int {
+    var<Int> x = 0;

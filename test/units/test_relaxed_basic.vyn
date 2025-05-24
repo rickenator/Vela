@@ -1,0 +1,26 @@
+// filepath: test/units/test_relaxed_basic.vyn
+// @test: Basic Relaxed Syntax
+// @description: Basic test for relaxed variable declaration syntax
+// @category: parser, syntax
+// @expect: pass
+// @parse-only: true
+// @expect-output: n/a
+// @expect-error: n/a
+// @expect-return: n/a
+
+fn<Int> main() -> {
+    // Using relaxed syntax for local variables
+    Int x = 42
+    String msg = "Hello"
+    
+    // Using standard syntax
+    var<Float> pi = 3.14
+    
+    // Using constants with relaxed syntax
+    const Bool flag = true
+    
+    // Type inference with auto
+    auto y = x * 2
+    
+    return y  // Should return 84
+}

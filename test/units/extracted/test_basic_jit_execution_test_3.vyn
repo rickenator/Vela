@@ -1,0 +1,14 @@
+// @test: Basic JIT execution test
+// @description: Extracted from tests.cpp - Basic JIT execution test
+// @category: uncategorized
+// @expect: pass
+// @parse-only: true
+// @expect-output: n/a
+// @expect-error: n/a
+// @expect-return: n/a
+
+
+fn<Void> main() -> -> Int {
+    var<Int> x = 42;
+    return x;
+}

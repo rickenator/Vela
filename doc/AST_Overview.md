@@ -14,7 +14,7 @@ This documentation is split into several parts:
 
 *   **[Core AST Design](./AST_Core.md)**: Describes the base `Node` class, fundamental AST structures, the `NodeType` enum, and the Visitor pattern.
 *   **[Literals](./AST_Literals.md)**: Details AST nodes representing various literal values (integers, strings, booleans, arrays, objects, etc.).
-*   **[Expressions](./AST_Expressions.md)**: Covers AST nodes for different kinds of expressions (unary, binary, calls, member access, etc.).
+*   **[Expressions](./AST_Expressions.md)**: Covers AST nodes for different kinds of expressions (unary, binary, calls, member access, etc.), including compiler intrinsics such as `borrow()` and `view()` parsed as CallExpression.
 *   **[Statements](./AST_Statements.md)**: Explains AST nodes for statements (blocks, if, for, while, return, etc.).
 *   **[Declarations](./AST_Declarations.md)**: Details AST nodes for declarations (variables, functions, structs, enums, etc.).
 *   **[Types](./AST_Types.md)**: Focuses on AST nodes related to type representations (`TypeNode`).

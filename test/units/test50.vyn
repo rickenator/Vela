@@ -1,0 +1,17 @@
+// test50.vyn - Tests borrow(expr) and view(expr) syntax
+fn<Int> main() -> {
+    var<my<Int>> x = 10;
+    
+    unsafe {
+        // Test borrow shorthand for mutable borrow
+        var<their<Int>> b = borrow(x);
+        b = 20; // Modify through the borrow
+        
+        // Test view shorthand for immutable borrow
+        var<their<Int const>> v = view(x);
+        // v = 30; // This would be a compile error as v is immutable
+        
+        // Verify that x was modified through b
+        return x; // Should return 20
+    }
+}

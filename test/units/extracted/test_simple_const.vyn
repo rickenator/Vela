@@ -1,0 +1,8 @@
+// @test: Simple const type test
+// @description: Tests parsing const<Int> as a type
+// @category: parser, syntax
+// @expect: pass
+// @parse-only: true
+
+// Simple variable declaration with const<Int>
+const<Int> x = 42

@@ -1,0 +1,11 @@
+// filepath: /home/rick/Projects/Vyn/test/units/extracted/test53.vyn
+// @test: 
+// @description: Extracted from tests.cpp - 
+// @category: parser
+// @expect: pass
+// @parse-only: true
+// @expect-output: n/a
+// @expect-error: n/a
+// @expect-return: n/a
+
+

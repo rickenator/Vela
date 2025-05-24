@@ -1,0 +1,12 @@
+// @test: Parser handles brace-based function
+// @description: Extracted from tests.cpp - Parser handles brace-based function
+// @category: parser
+// @expect: pass
+// @parse-only: true
+// @expect-output: n/a
+// @expect-error: n/a
+// @expect-return: n/a
+
+fn example() {
+    10;
+}

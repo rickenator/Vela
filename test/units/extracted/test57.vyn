@@ -1,0 +1,16 @@
+// filepath: /home/rick/Projects/Vyn/test/units/extracted/test57.vyn
+// @test: Codegen: from<Type>(expr) with specific type
+// @description: Extracted from tests.cpp - Codegen: from<Type>(expr) with specific type
+// @category: parser
+// @expect: pass
+// @parse-only: true
+// @expect-output: n/a
+// @expect-error: n/a
+// @expect-return: n/a
+
+    std::string source = R"(
+struct MyData {
+    val: Int
+}
+fn main() -> Int {
+    var<MyData> d = MyData{val: 777};

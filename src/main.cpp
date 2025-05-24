@@ -32,12 +32,20 @@ int main(int argc, char* argv[]) {
 
     bool next_arg_is_test_specifier_for_verbose = false;
     bool test_mode_active = false;
+    bool parse_only_mode = false;
+    bool semantic_only_mode = false;
 
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
         if (arg == "--test") {
             test_mode_active = true;
             // Enter test mode for Catch2; do not forward our own flag
+            continue;
+        } else if (arg == "--parse-only") {
+            parse_only_mode = true;
+            continue;
+        } else if (arg == "--semantic-only") {
+            semantic_only_mode = true;
             continue;
         } else if (arg == "--debug-verbose") {
             if (i + 1 < argc) {
@@ -107,10 +115,29 @@ int main(int argc, char* argv[]) {
 
     // If not in test mode, proceed with original file processing logic
     if (argc > 1) {
-        std::string filename = argv[1];
-        // ... (your existing file processing logic) ...
+        // Find the file name to process (skip options)
+        std::string filename;
+        for (int i = 1; i < argc; i++) {
+            std::string arg = argv[i];
+            // Skip known option flags and their arguments
+            if (arg == "--debug-verbose" || arg == "--debug-parser-verbose") {
+                i++; // Skip the next argument which is the parameter for this flag
+                continue;
+            }
+            // Not an option (doesn't start with --), assume it's the file
+            if (arg.substr(0, 2) != "--") {
+                filename = arg;
+                break;
+            }
+        }
+        
+        if (filename.empty()) {
+            std::cerr << "Error: No input file specified" << std::endl;
+            return 1;
+        }
+        
         std::cout << "Processing file: " << filename << std::endl;
-         try {
+        try {
             std::ifstream file(filename);
             if (!file.is_open()) {
                 std::cerr << "Error: Could not open file " << filename << std::endl;
@@ -122,32 +149,50 @@ int main(int argc, char* argv[]) {
             Lexer lexer(source, filename);
             auto tokens = lexer.tokenize();
             
-            // Optional: Print tokens if verbose mode is somehow enabled globally (not typical for non-test runs)
-            // if (g_make_all_tests_verbose) { // Or some other global verbose flag
-            //     for (const auto& token : tokens) {
-            //         std::cout << vyn::token_type_to_string(token.type) << " (\'" << token.lexeme << "\')\\n";
-            //     }
-            // }
+            // Optional: Print tokens if verbose mode is enabled
+            if (g_make_all_tests_verbose || !g_verbose_test_specifiers.empty()) {
+                std::cout << "Tokenization results:" << std::endl;
+                for (const auto& token : tokens) {
+                    std::cout << vyn::token_type_to_string(token.type) << " (" << token.lexeme << ") at " 
+                              << token.location.filePath << ":" << token.location.line << ":" << token.location.column << std::endl;
+                }
+            }
 
             vyn::Parser parser(tokens, filename);
-            // if (g_make_all_tests_verbose) { // Or some other global verbose flag
-            //    parser.set_verbose(true);
-            // }
+            // Enable parser verbosity if requested
+            if (vyn::g_make_all_parser_verbose) {
+                // parser.set_verbose(true); // TODO: Add set_verbose method to Parser class
+            }
             std::unique_ptr<vyn::ast::Module> ast = parser.parse_module();
             
-            // vyn::SemanticAnalyzer sema;
-            // sema.analyze(ast.get());
-            // auto errors = sema.getErrors();
-            // if (!errors.empty()) {
-            //     for (const auto& err : errors) {
-            //         std::cerr << "Semantic Error: " << err << std::endl;
-            //     }
-            //     return 1; // Indicate semantic error
-            // }
+            // In parse-only mode, we stop after parsing
+            if (parse_only_mode) {
+                std::cout << "Parse completed successfully" << std::endl;
+                return 0;
+            }
+            
+            // Uncomment and update as needed for semantic analysis and code generation
+            /*
+            vyn::SemanticAnalyzer sema;
+            sema.analyze(ast.get());
+            auto errors = sema.getErrors();
+            if (!errors.empty()) {
+                for (const auto& err : errors) {
+                    std::cerr << "Semantic Error: " << err << std::endl;
+                }
+                return 1; // Indicate semantic error
+            }
 
-            // vyn::LLVMCodegen codegen;
-            // codegen.generate(ast.get(), "output.ll"); // Example output name
-            // std::cout << "LLVM IR generated to output.ll" << std::endl;
+            // In semantic-only mode, we stop after semantic analysis
+            if (semantic_only_mode) {
+                std::cout << "Semantic analysis completed successfully" << std::endl;
+                return 0;
+            }
+
+            vyn::LLVMCodegen codegen;
+            codegen.generate(ast.get(), "output.ll"); // Example output name
+            std::cout << "LLVM IR generated to output.ll" << std::endl;
+            */
 
 
         } catch (const std::exception& e) {
@@ -155,11 +200,17 @@ int main(int argc, char* argv[]) {
             return 1;
         }
     } else {
-        std::cout << "Vyn Parser - Usage: " << argv[0] << " <filename> | --test [catch2_options]" << std::endl;
-        std::cout << "                 " << argv[0] << " --test --debug-verbose <all|test_name,[tag],...>" << std::endl;
-        std::cout << "                 " << argv[0] << " --test --no-debug-output" << std::endl;
-        std::cout << "                 " << argv[0] << " --test --debug-parser-verbose <all|test_name,[tag],...>" << std::endl;
-        std::cout << "                 " << argv[0] << " --test --no-parser-debug-output" << std::endl;
+        std::cout << "Vyn Parser - Usage: " << argv[0] << " <filename> [options] | --test [catch2_options]" << std::endl;
+        std::cout << "Options:" << std::endl;
+        std::cout << "  --parse-only          Stop after parsing (validates syntax only)" << std::endl;
+        std::cout << "  --semantic-only       Stop after semantic analysis" << std::endl;
+        std::cout << std::endl;
+        std::cout << "Test Mode Options:" << std::endl;
+        std::cout << "  --test                Run test suite" << std::endl;
+        std::cout << "  --debug-verbose <all|test_name,[tag],...]> Enable verbose output for tests" << std::endl;
+        std::cout << "  --no-debug-output     Suppress all debug output" << std::endl;
+        std::cout << "  --debug-parser-verbose <all|test_name,[tag],...]> Enable verbose parser output" << std::endl;
+        std::cout << "  --no-parser-debug-output Suppress parser debug output" << std::endl;
     }
 
     return result; // Or 0 if not running tests and successful

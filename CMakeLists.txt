@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.15)
-project(VynParser)
+project(VynParser VERSION 0.3.4)
 
 set(CMAKE_BUILD_TYPE Debug)
 set(CMAKE_CXX_STANDARD 17)
@@ -127,3 +127,12 @@ set_source_files_properties(src/tests.cpp PROPERTIES COMPILE_FLAGS "-DDEBUG_TEST
 
 # Enable verbose debugging for all parser files
 add_compile_definitions(VERBOSE)
+
+# Add a custom target for running tests
+find_package(Python3 REQUIRED)
+add_custom_target(run-tests
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/test/run_tests.py --vyn $<TARGET_FILE:vyn> --test-dir ${CMAKE_SOURCE_DIR}/test
+    DEPENDS vyn
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    COMMENT "Running Vyn test suite"
+)

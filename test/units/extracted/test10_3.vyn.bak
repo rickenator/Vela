@@ -1,0 +1,11 @@
+// @test: Parser handles defer
+// @description: Extracted from tests.cpp - Parser handles defer
+// @category: parser
+// @expect: pass
+// @parse-only: true
+// @expect-output: n/a
+// @expect-error: n/a
+// @expect-return: n/a
+
+fn example()
+    defer foo()

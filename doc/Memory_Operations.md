@@ -23,8 +23,8 @@ The `loc<T>` type represents a raw pointer to memory containing a value of type 
 
 Example:
 ```vyn
-var x: Int = 42;
-var p: loc<Int>; // Declares a pointer to Int
+var<Int> x = 42;
+var<loc<Int>> p; // Declares a pointer to Int
 
 unsafe {
     p = loc(x);  // Sets p to point to x
@@ -53,9 +53,9 @@ The `loc()` operation creates a pointer to a variable.
 
 Example:
 ```vyn
-var x: Int = 42;
+var<Int> x = 42;
 unsafe {
-    var p: loc<Int> = loc(x);
+    var<loc<Int>> p = loc(x);
 }
 ```
 
@@ -75,7 +75,7 @@ The `at()` operation accesses the value at a pointer's location.
 Examples:
 ```vyn
 unsafe {
-    var y: Int = at(p);  // Reading from a pointer (load)
+    var<Int> y = at(p);  // Reading from a pointer (load)
     at(p) = 99;          // Writing to a pointer (store)
 }
 ```
@@ -92,13 +92,13 @@ The `from<loc<T>>()` operation converts between different pointer types or from 
 Examples:
 ```vyn
 unsafe {
-    // Convert an integer to a pointer
-    var addr: Int = 0x12345678;
-    var p: loc<Int> = from<loc<Int>>(addr);
-    
-    // Convert between pointer types
-    var p_void: loc<Void> = loc(x);
-    var p_int: loc<Int> = from<loc<Int>>(p_void);
+     // Convert an integer to a pointer
+    var<Int> addr = 0x12345678;
+    var<loc<Int>> p = from<loc<Int>>(addr);
+     
+     // Convert between pointer types
+    var<loc<Void>> p_void = loc(x);
+    var<loc<Int>> p_int = from<loc<Int>>(p_void);
 }
 ```
 
@@ -112,8 +112,8 @@ All memory operations must be contained within `unsafe` blocks, which are repres
 
 Example:
 ```vyn
-var x: Int = 42;
-var p: loc<Int>;
+var<Int> x = 42;
+var<loc<Int>> p;
 
 unsafe {
     p = loc(x);

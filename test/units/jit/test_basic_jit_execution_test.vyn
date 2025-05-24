@@ -1,0 +1,13 @@
+// filepath: /home/rick/Projects/Vyn/test/units/jit/test_basic_jit_execution_test.vyn
+// @test: Basic JIT execution test
+// @description: Extracted from tests.cpp - Basic JIT execution test
+// @category: jit
+// @expect: pass
+// @expect-output: n/a
+// @expect-error: n/a
+// @expect-return: 42
+
+fn<Int> main() -> {
+    var<Int> x = 42;
+    return x;
+}

@@ -9,6 +9,58 @@ The following header files exist in both `/include/vyn/` and `/include/vyn/parse
 - lexer.hpp
 - parser.hpp
 - source_location.hpp
+
+## Test Cleanup Process
+
+This document describes the process we followed to extract tests from tests.cpp into individual .vyn test files.
+
+### Background
+
+The original testing approach used test cases embedded in tests.cpp, which contained Vyn code snippets as string literals.
+We extracted these into separate .vyn files to allow:
+
+1. Better organization and isolation of test cases
+2. Easier maintenance and modification of tests
+3. Support for the `--parse-only` flag 
+4. Better handling of optional semicolons and new syntax features
+
+### What Was Done
+
+1. **Extraction**: All test cases with Vyn code fragments were extracted from tests.cpp into individual .vyn files in the `test/units/extracted/` directory.
+   - 64 test cases were identified in tests.cpp
+   - All test cases were successfully extracted
+   - A naming convention of testN.vyn was used, where N is the test number
+
+2. **Syntax Updating**: The extracted test files were updated to use the current Vyn syntax:
+   - Updated function declarations to use `fn<ReturnType> name() ->` syntax
+   - Ensured proper use of the arrow (`->`) separator between function signature and body
+   - Fixed variable declarations to work with optional semicolons
+
+3. **Cleanup**: The extracted test cases were removed from tests.cpp, leaving only:
+   - The basic framework code
+   - Tests that can't be expressed as .vyn files (if any)
+
+### Test Files Organization
+
+- **Original Tests**: Located in `test/units/extracted/`
+- **Naming Convention**: 
+  - `testN.vyn` - Basic test files
+  - `testN_1.vyn`, `testN_2.vyn` - Duplicate test files with variations or fixes
+
+### How to Run Tests
+
+Tests can be run using the test harness:
+
+```bash
+cd /home/rick/Projects/Vyn
+python3 test/run_tests.py --test-dir test/units/extracted --vyn ./build/vyn
+```
+
+### Future Improvements
+
+1. **Consolidate Duplicates**: Some tests were extracted multiple times (with _1, _2 suffixes). These should be reviewed and consolidated.
+2. **Add More Metadata**: More detailed metadata could be added to test files to better categorize and describe them.
+3. **Organizational Structure**: Consider organizing tests into subdirectories by category (parser, lexer, semantics, etc.).
 - token.hpp
 
 From the code inspection, the correct versions appear to be in `/include/vyn/parser/`.

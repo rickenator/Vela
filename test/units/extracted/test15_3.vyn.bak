@@ -1,0 +1,14 @@
+// @test: Parser handles array type with expression size
+// @description: Extracted from tests.cpp - Parser handles array type with expression size
+// @category: parser
+// @expect: pass
+// @parse-only: true
+// @expect-output: n/a
+// @expect-error: n/a
+// @expect-return: n/a
+
+template BTree<K, V, M: UInt> {
+    class Node {
+        var<[K; M-1]> keys
+    }
+}

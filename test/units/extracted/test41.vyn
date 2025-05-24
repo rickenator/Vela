@@ -1,0 +1,13 @@
+// filepath: /home/rick/Projects/Vyn/test/units/extracted/test41.vyn
+// @test: Semantic: 'loc(var)' requires unsafe block
+// @description: Extracted from tests.cpp - Semantic: 'loc(var)' requires unsafe block
+// @category: parser
+// @expect: pass
+// @parse-only: true
+// @expect-output: n/a
+// @expect-error: n/a
+// @expect-return: n/a
+
+    std::string source = R"(
+fn main() -> Int{
+    var<Int> x;

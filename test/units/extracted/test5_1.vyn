@@ -1,0 +1,11 @@
+// @test: Lexer rejects tabs
+// @description: Extracted from tests.cpp - Lexer rejects tabs
+// @category: lexer
+// @expect: pass
+// @parse-only: true
+// @expect-output: n/a
+// @expect-error: n/a
+// @expect-return: n/a
+
+fn<Void> example() ->
+	const<Int> x = 10

@@ -6,7 +6,7 @@
 
 ## 1. Introduction
 
-Welcome to the Vyn Programming Guide. This guide walks you through writing, building, and extending Vyn programs, from your first “Hello, Vyn!” to deep dives into the Vyn language internals and runtime. Version 0.3.2 delivers a robust parser with support for advanced constructs like asynchronous programming, generic templates, operator overloading, and class declarations within templates, validated by a comprehensive test suite (35/58 tests passing).
+Welcome to the Vyn Programming Guide. This guide walks you through writing, building, and extending Vyn programs, from your first “Hello, Vyn!” to deep dives into the Vyn language internals and runtime. Version 0.3.4 delivers a robust parser with support for advanced constructs like asynchronous programming, generic templates, operator overloading, and class declarations within templates, validated by a comprehensive test suite.
 
 ### 1.1 Purpose & Audience
 
@@ -86,7 +86,7 @@ This section guides you through installing Vyn, writing your first programs, and
 
 ### 2.1 Installation & Toolchain Overview
 
-Begin by cloning the Vyn repository and building the parser for version 0.2.8:
+Begin by cloning the Vyn repository and building the parser for version 0.3.4:
 
 ```bash
 git clone https://github.com/rickenator/Vyn.git
@@ -208,12 +208,12 @@ Vyn's memory model is designed for safety and explicitness, distinguishing betwe
 **Binding Mutability**:
 *   **`var`**: Declares a mutable binding. The variable can be reassigned.
     ```vyn
-    var x: Int = 10;
+    var<Int> x = 10;
     x = 20; // Allowed
     ```
 *   **`const`**: Declares an immutable binding. The variable cannot be reassigned after initialization.
     ```vyn
-    const PI: Float = 3.14159;
+    const<Float> PI = 3.14159;
     // PI = 3.0; // Error
     ```
 
@@ -221,12 +221,12 @@ Vyn's memory model is designed for safety and explicitness, distinguishing betwe
 Vyn uses ownership types to manage memory and control data access:
 *   **`my<T>`**: Unique-owning pointer. When a `my<T>` goes out of scope, its data is deallocated.
     ```vyn
-    var unique_data: my<String> = make_my("owned");
+    var<my<String>> unique_data = make_my("owned");
     ```
 *   **`our<T>`**: Shared-owning pointer (reference-counted). Data is deallocated when the last `our<T>` is dropped.
     ```vyn
-    var shared_data: our<String> = make_our("shared");
-    var another_ref: our<String> = shared_data; // Reference count incremented
+    var<our<String>> shared_data = make_our("shared");
+    var<our<String>> another_ref = shared_data; // Reference count incremented
     ```
 *   **`their<T>`**: Borrowed pointer (non-owning reference). Provides temporary access to data owned by `my<T>`, `our<T>`, or another `their<T>`. Created using `borrow` or `view`.
 
@@ -242,14 +242,14 @@ Controlled by applying `const` to the type `T` *within* the ownership wrapper:
 **Borrowing with `view` and `borrow`**:
 *   **`view <expr>`**: Creates an immutable borrow `their<T const>`.
     ```vyn
-    var owner: my<Int> = make_my(10);
-    var immutable_ref: their<Int const> = view owner;
+    var<my<Int>> owner = make_my(10);
+    var<their<Int const>> immutable_ref = view owner;
     // immutable_ref = 20; // Error: cannot modify through their<T const>
     ```
 *   **`borrow <expr>`**: Creates a mutable borrow `their<T>`.
     ```vyn
-    var owner: my<Int> = make_my(10);
-    var mutable_ref: their<Int> = borrow owner;
+    var<my<Int>> owner = make_my(10);
+    var<their<Int>> mutable_ref = borrow owner;
     mutable_ref = 20; // OK, owner's data is now 20
     ```
 The compiler enforces borrow-checking rules to ensure memory safety.
@@ -258,15 +258,15 @@ The compiler enforces borrow-checking rules to ensure memory safety.
 For low-level operations requiring direct memory access, Vyn provides the `loc<T>` type and related intrinsics. These operations are restricted to `unsafe` blocks to ensure memory safety in normal code.
 
 ```vyn
-var x: Int = 42;
+var<Int> x = 42;
 unsafe {
-    var p: loc<Int> = loc(x);  // Get pointer to x
+    var<loc<Int>> p = loc(x);  // Get pointer to x
     at(p) = 99;               // Write to memory at p
-    var y: Int = at(p);       // Read from memory at p
+    var<Int> y = at(p);       // Read from memory at p
     
     // Convert between pointer types
-    var addr: Int = 0x12345678;
-    var q: loc<Int> = from<loc<Int>>(addr);
+    var<Int> addr = 0x12345678;
+    var<loc<Int>> q = from<loc<Int>>(addr);
 }
 ```
 
@@ -276,7 +276,7 @@ unsafe {
 - **`loc(expr)`**: Creates a pointer to the memory location of `expr`. Returns a value of type `loc<T>`.
 - **`at(p)`**: Dereferences the pointer `p`. Can be used both as an lvalue (for writing) and an rvalue (for reading).
 - **`from<loc<T>>(expr)`**: Converts between pointer types or from an integer address to a typed pointer.
-- All operations with `loc<T>` must be performed within `unsafe { ... }` blocks, ensuring that unsafe memory access is always explicit and contained.
+- All operations with `loc<T>` must be performed within `unsafe { ... }` blocks, ensuring that unsafe memory access is always explicit and localized.
 
 Safe code uses only `my<T>`, `our<T>`, and `their<T>` for ownership and borrowing. Use of `loc<T>` is reserved for advanced/unsafe scenarios, and is never required for ordinary programming.
 
@@ -305,8 +305,8 @@ Outside of `unsafe` blocks, the compiler enforces memory safety through ownershi
 The `loc<T>` type represents a raw pointer to a memory location containing a value of type `T`:
 
 ```vyn
-var x: Int = 42;
-var p: loc<Int>; // Raw pointer type
+var<Int> x = 42;
+var<loc<Int>> p; // Raw pointer type
 
 unsafe {
     p = loc(x);  // Gets the address of x
@@ -320,7 +320,7 @@ Within `unsafe` blocks, several intrinsics provide low-level memory manipulation
 **Creating Pointers**:
 ```vyn
 unsafe {
-    var p: loc<Int> = loc(myVariable);  // Points to myVariable
+    var<loc<Int>> p = loc(myVariable);  // Points to myVariable
 }
 ```
 
@@ -328,7 +328,7 @@ unsafe {
 ```vyn
 unsafe {
     // Reading from a pointer
-    var value: Int = at(p);
+    var<Int> value = at(p);
     
     // Writing to a pointer
     at(p) = 99;
@@ -339,12 +339,12 @@ unsafe {
 ```vyn
 unsafe {
     // Convert between pointer types
-    var p_void: loc<Void> = loc(x);
-    var p_int: loc<Int> = from<loc<Int>>(p_void);
+    var<loc<Void>> p_void = loc(x);
+    var<loc<Int>> p_int = from<loc<Int>>(p_void);
     
     // Convert from integer address to pointer
-    var addr: Int = 0x12345678;
-    var p_addr: loc<Int> = from<loc<Int>>(addr);
+    var<Int> addr = 0x12345678;
+    var<loc<Int>> p_addr = from<loc<Int>>(addr);
 }
 ```
 
@@ -353,19 +353,19 @@ unsafe {
 Here's a complete example demonstrating memory operations in Vyn:
 
 ```vyn
-fn modify_through_pointer(x: Int) -> Int {
-  var result: Int = 0;
+fn<Int> modify_through_pointer(var<Int> x) -> {
+  var<Int> result = 0;
   
   unsafe {
     // Create a pointer to the local variable
-    var p: loc<Int> = loc(result);
+    var<loc<Int>> p = loc(result);
     
     // Modify the memory directly
     at(p) = x * 2;
     
     // Create a pointer to a different type and convert back
-    var p_void: loc<Void> = from<loc<Void>>(p);
-    var p_back: loc<Int> = from<loc<Int>>(p_void);
+    var<loc<Void>> p_void = from<loc<Void>>(p);
+    var<loc<Int>> p_back = from<loc<Int>>(p_void);
     
     // Read through the converted pointer
     result = at(p_back);
@@ -430,8 +430,8 @@ match opt {
 Functions form the basic unit of behavior. You can nest functions inside other functions, capturing outer variables:
 
 ```vyn
-fn outer(x: Int) -> Int {
-    fn inner(y: Int) -> Int { x + y }
+fn<Int> outer(var<Int> x) -> {
+    fn<Int> inner(var<Int> y) -> { x + y }
     inner(10)
 }
 ```
@@ -440,9 +440,9 @@ fn outer(x: Int) -> Int {
 * **Anonymous lambdas**: Planned inline, unnamed functions useful for short callbacks or functional programming patterns. Similar to JavaScript arrow functions or Python lambdas, they will let you define behavior on the fly without declaring a separate named function:
 
 ```vyn
-let sq = fn(v: Int) -> Int { v * v }  # 'sq' will hold a function that squares its input
-let nums = vec![1, 2, 3]
-let squares = nums.map(fn(n) -> Int { n * n })  # Will pass lambda directly
+var<Function> sq = fn<Int>(var<Int> v) -> { v * v }  # 'sq' will hold a function that squares its input
+var<Vec<Int>> nums = vec![1, 2, 3]
+var<Vec<Int>> squares = nums.map(fn<Int>(var<Int> n) -> { n * n })  # Will pass lambda directly
 ```
 
 Under the hood, lambdas will produce a function object that can capture surrounding variables by value or reference, depending on usage.

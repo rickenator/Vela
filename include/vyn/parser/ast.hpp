@@ -134,8 +134,10 @@ using BorrowExpressionPtr = std::unique_ptr<BorrowExpression>;
 struct FunctionParameter {
     std::unique_ptr<Identifier> name;
     TypeNodePtr typeNode; 
-    FunctionParameter(std::unique_ptr<Identifier> n, TypeNodePtr tn = nullptr)
-        : name(std::move(n)), typeNode(std::move(tn)) {}
+    bool isMutable; // Whether this is a var or const parameter
+    
+    FunctionParameter(std::unique_ptr<Identifier> n, TypeNodePtr tn = nullptr, bool isMut = true)
+        : name(std::move(n)), typeNode(std::move(tn)), isMutable(isMut) {}
 };
 
 struct ObjectProperty {

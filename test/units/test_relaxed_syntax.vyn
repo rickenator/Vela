@@ -1,0 +1,98 @@
+// filepath: test/units/test_relaxed_syntax.vyn
+// @test: Comprehensive Relaxed Syntax
+// @description: Comprehensive test for all relaxed syntax features
+// @category: parser, syntax
+// @expect: pass
+// @parse-only: true
+// @expect-output: n/a
+// @expect-error: n/a
+// @expect-return: n/a
+
+// Function with standard parameter syntax
+fn<Int> standard_params(var<Int> x, const<String> y) -> {
+    return x + y.to_int()
+}
+
+// Function with relaxed parameter syntax
+fn<Int> relaxed_params(Int x, const String y) -> {
+    return x + y.to_int()
+}
+
+// Function with mixed parameter syntax
+fn<Float> mixed_params(var<Int> a, Float b, const<String> c, const Bool d) -> {
+    var<Float> result = a * b
+    if d {
+        result += c.to_float()
+    }
+    return result
+}
+
+// Function with complex type parameters
+fn<Void> complex_types(my<[Int]> numbers, const their<String const> text) -> {
+    for i in 0..numbers.len() {
+        println(text + numbers[i].to_string())
+    }
+}
+
+// Test local variable declarations
+fn<Void> test_local_vars() -> {
+    // Standard syntax
+    var<Int> a = 10
+    const<String> b = "standard"
+    
+    // Relaxed syntax
+    Int c = 20
+    String d = "relaxed"
+    const Float e = 3.14
+    
+    // Auto type inference
+    auto f = c * 2
+    auto g = d + " world"
+    
+    // Uninitialized variables
+    Int h
+    h = 30
+    
+    // Ownership types
+    my<[Int]> nums = [1, 2, 3]
+    
+    // Print everything to verify
+    println("a = " + a.to_string())
+    println("b = " + b)
+    println("c = " + c.to_string())
+    println("d = " + d)
+    println("e = " + e.to_string())
+    println("f = " + f.to_string())
+    println("g = " + g)
+    println("h = " + h.to_string())
+    println("nums = " + nums.to_string())
+}
+
+// Test function calls with different parameter styles
+fn<Void> test_function_calls() -> {
+    // Call with standard syntax
+    const<Int> result1 = standard_params(var<Int>(5), const<String>("10"))
+    println("Standard params result: " + result1.to_string())
+    
+    // Call with relaxed syntax
+    const Int result2 = relaxed_params(15, const String("5"))
+    println("Relaxed params result: " + result2.to_string())
+    
+    // Call with mixed syntax
+    Float result3 = mixed_params(var<Int>(10), 2.5, const<String>("1.5"), true)
+    println("Mixed params result: " + result3.to_string())
+}
+
+// Main test function
+fn<Int> main() -> {
+    println("Testing relaxed syntax features")
+    
+    test_local_vars()
+    test_function_calls()
+    
+    // Test complex type with relaxed syntax
+    my<[Int]> test_array = [7, 8, 9]
+    complex_types(test_array, const view("Item: "))
+    
+    return 0
+}

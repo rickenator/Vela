@@ -1,0 +1,13 @@
+// filepath: /home/rick/Projects/Vyn/test/units/extracted/test37.vyn
+// @test: Semantic: loc<T> cannot be assigned from integer literal
+// @description: Extracted from tests.cpp - Semantic: loc<T> cannot be assigned from integer literal
+// @category: parser
+// @expect: pass
+// @parse-only: true
+// @expect-output: n/a
+// @expect-error: n/a
+// @expect-return: n/a
+
+    std::string source = R"(
+fn main() -> Int {
+    var<loc<Int>> p = 0x1234;

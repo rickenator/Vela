@@ -1,0 +1,15 @@
+// @test: Parser handles full btree.vyn
+// @description: Extracted from tests.cpp - Parser handles full btree.vyn
+// @category: parser
+// @expect: pass
+// @parse-only: true
+// @expect-output: n/a
+// @expect-error: n/a
+// @expect-return: n/a
+
+class Node {
+    var<Bool> is_leaf
+    fn new(is_leaf_param: Bool) -> Node {
+        return Node { is_leaf: is_leaf_param }
+    }
+}

@@ -1,0 +1,13 @@
+// filepath: /home/rick/Projects/Vyn/test/units/extracted/test44.vyn
+// @test: Semantic: 'from(addr_val)' requires unsafe block (already covered but good to be explicit)
+// @description: Extracted from tests.cpp - Semantic: 'from(addr_val)' requires unsafe block (already covered but good to be explicit)
+// @category: parser
+// @expect: pass
+// @parse-only: true
+// @expect-output: n/a
+// @expect-error: n/a
+// @expect-return: n/a
+
+    std::string source = R"(
+fn main() -> Int{
+    var<Int> addr = 0x1234;

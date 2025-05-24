@@ -86,6 +86,13 @@ public:
 } // namespace vyn::ast
 ```
 
+Borrowing Intrinsics (shorthand)
+-------------------------------
+
+The `borrow(owner)` and `view(owner)` intrinsics are parsed as CallExpression nodes
+with `callee` matching the identifier `borrow` or `view` and a single argument.
+They produce `their<T>` or `their<T const>` respectively.
+
 ## 4. `ConstructionExpression`
 
 Represents an expression that constructs an instance of a type using constructor-like syntax (e.g., `Point(10, 20)`).
@@ -434,8 +441,8 @@ Several memory operations in Vyn are represented using `ConstructionExpression` 
 Creates a pointer to a variable's memory location.
 
 ```
-var x: Int = 42;
-var p: loc<Int> = loc(x); // Creates a pointer to x
+var<Int> x = 42;
+var<loc<Int>> p = loc(x); // Creates a pointer to x
 ```
 
 AST Representation:
@@ -448,8 +455,8 @@ AST Representation:
 Converts an integer address or a different pointer type to a specific pointer type.
 
 ```
-var addr: Int = 0x12345678;
-var p: loc<Int> = from<loc<Int>>(addr); // Converts integer to pointer
+var<Int> addr = 0x12345678;
+var<loc<Int>> p = from<loc<Int>>(addr); // Converts integer to pointer
 ```
 
 AST Representation:
@@ -462,8 +469,8 @@ AST Representation:
 Accesses the value at a pointer's memory location.
 
 ```
-var p: loc<Int> = loc(x);
-var y: Int = at(p); // Reads from pointer
+var<loc<Int>> p = loc(x);
+var<Int> y = at(p); // Reads from pointer
 at(p) = 99;         // Writes to pointer
 ```
 

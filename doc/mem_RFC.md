@@ -28,8 +28,8 @@ The `const` keyword on the type itself is reserved for data immutability (`T con
 **Example**:
 
 ```vyn
-var counter: Int = 0    // mutable variable
-const limit: Int = 100  // immutable binding
+var<Int> counter = 0    // mutable variable
+const<Int> limit = 100  // immutable binding
 ```
 
 ---
@@ -173,22 +173,22 @@ fn use_raw()
 
 | Declaration                 | Binding   | Ownership | Data Mutability | Safe?        |
 | --------------------------- | --------- | --------- | --------------- | ------------ |
-| `var p: my<Foo>`            | mutable   | unique    | mutable         | ✔️           |
-| `const p: my<Foo>`          | immutable | unique    | mutable         | ✔️           |
-| `var p: my<Foo const>`      | mutable   | unique    | immutable       | ✔️           |
-| `const p: my<Foo const>`    | immutable | unique    | immutable       | ✔️           |
-| `var p: our<Foo>`           | mutable   | shared    | mutable         | ✔️           |
-| `const p: our<Foo>`         | immutable | shared    | mutable         | ✔️           |
-| `var p: our<Foo const>`     | mutable   | shared    | immutable       | ✔️           |
-| `const p: our<Foo const>`   | immutable | shared    | immutable       | ✔️           |
-| `var p: their<Foo>`         | mutable   | borrowed  | mutable         | ✔️           |
-| `const p: their<Foo>`       | immutable | borrowed  | mutable         | ✔️           |
-| `var p: their<Foo const>`   | mutable   | borrowed  | immutable       | ✔️           |
-| `const p: their<Foo const>` | immutable | borrowed  | immutable       | ✔️           |
-| `var l: loc<Foo>`           | mutable   | raw       | mutable         | ❌ (`unsafe`) |
-| `const l: loc<Foo>`         | immutable | raw       | mutable         | ❌ (`unsafe`) |
-| `var l: loc<Foo const>`     | mutable   | raw       | immutable       | ❌ (`unsafe`) |
-| `const l: loc<Foo const>`   | immutable | raw       | immutable       | ❌ (`unsafe`) |
+| `var<my<Foo>> p`            | mutable   | unique    | mutable         | ✔️           |
+| `const<my<Foo>> p`          | immutable | unique    | mutable         | ✔️           |
+| `var<my<Foo const>> p`      | mutable   | unique    | immutable       | ✔️           |
+| `const<my<Foo const>> p`    | immutable | unique    | immutable       | ✔️           |
+| `var<our<Foo>> p`           | mutable   | shared    | mutable         | ✔️           |
+| `const<our<Foo>> p`         | immutable | shared    | mutable         | ✔️           |
+| `var<our<Foo const>> p`     | mutable   | shared    | immutable       | ✔️           |
+| `const<our<Foo const>> p`   | immutable | shared    | immutable       | ✔️           |
+| `var<their<Foo>> p`         | mutable   | borrowed  | mutable         | ✔️           |
+| `const<their<Foo>> p`       | immutable | borrowed  | mutable         | ✔️           |
+| `var<their<Foo const>> p`   | mutable   | borrowed  | immutable       | ✔️           |
+| `const<their<Foo const>> p` | immutable | borrowed  | immutable       | ✔️           |
+| `var<loc<Foo>> l`           | mutable   | raw       | mutable         | ❌ (`unsafe`) |
+| `const<loc<Foo>> l`         | immutable | raw       | mutable         | ❌ (`unsafe`) |
+| `var<loc<Foo const>> l`     | mutable   | raw       | immutable       | ❌ (`unsafe`) |
+| `const<loc<Foo const>> l`   | immutable | raw       | immutable       | ❌ (`unsafe`) |
 
 ---
 
@@ -200,15 +200,15 @@ fn use_raw()
 var a: my<Foo> = Foo{x:0}
 a.x = 5            // OK
 
-const b: my<Foo const> = Foo{x:10}
+const<my<Foo const>> b = Foo{x:10}
 // b.x = 15        // Error: data is const
 ```
 
 ### 10.2 Shared Ownership (`our<T>`)
 
 ```vyn
-var s: our<Bar> = make_our(Bar{v:1})
-var ts: our<Mutex<Bar>> = make_our(Mutex(Bar{v:2}))
+var<our<Bar>> s = make_our(Bar{v:1})
+var<our<Mutex<Bar>>> ts = make_our(Mutex(Bar{v:2}))
 ```
 
 ### 10.3 Borrowed References (`their<T>`)

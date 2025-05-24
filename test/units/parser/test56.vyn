@@ -1,0 +1,13 @@
+// filepath: /home/rick/Projects/Vyn/test/units/extracted/test56.vyn
+// @test: Semantic: Pointer operations require unsafe block - negative case
+// @description: Extracted from tests.cpp - Semantic: Pointer operations require unsafe block - negative case
+// @category: parser
+// @expect: pass
+// @parse-only: true
+// @expect-output: n/a
+// @expect-error: n/a
+// @expect-return: n/a
+
+    std::string source = R"(
+fn<Void> main() -> -> Int{
+    var<Int> x = 42;

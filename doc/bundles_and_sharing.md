@@ -99,8 +99,8 @@ import sort.Core      // OK: sort.Core shared with `sort`
 import sort.Common    // OK
 
 share(sort.UI)
-fn pretty_sort(nums: my<[Int]>) -> String {
-  var sorted = quicksort(nums)
+fn<String> pretty_sort(var<my<[Int]>> nums) -> {
+  var<my<[Int]>> sorted = quicksort(nums)
   return "[" + sorted.map(|x| x.to_string()).join(", ") + "]"
 }
 ```

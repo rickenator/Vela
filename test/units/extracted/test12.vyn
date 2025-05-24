@@ -1,0 +1,10 @@
+// @test: Parser handles list comprehension
+// @description: Extracted from tests.cpp - Parser handles list comprehension
+// @category: parser
+// @expect: pass
+// @parse-only: true
+// @expect-output: n/a
+// @expect-error: n/a
+// @expect-return: n/a
+
+const<[Int; N-1]> l = [x * x for x in 0..10];

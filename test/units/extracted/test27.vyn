@@ -1,0 +1,10 @@
+// @test: Parser handles expression statements in blocks
+// @description: Extracted from tests.cpp - Parser handles expression statements in blocks
+// @category: parser
+// @expect: pass
+// @parse-only: true
+// @expect-output: n/a
+// @expect-error: n/a
+// @expect-return: n/a
+
+fn<Void> test() -> { [x * x for x in 0..10]; x.y; }

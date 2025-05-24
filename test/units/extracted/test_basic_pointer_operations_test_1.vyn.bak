@@ -1,0 +1,19 @@
+// @test: Basic pointer operations test
+// @description: Extracted from tests.cpp - Basic pointer operations test
+// @category: uncategorized
+// @expect: pass
+// @parse-only: true
+// @expect-output: n/a
+// @expect-error: n/a
+// @expect-return: n/a
+
+
+fn main() -> Int {
+    var<Int> x = 77;
+    var<loc<Int>> p;
+    unsafe {
+        p = loc(x);
+        at(p) = 99;
+    }
+    return x;
+}

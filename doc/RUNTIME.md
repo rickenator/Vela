@@ -19,23 +19,23 @@ Vyn uses two keywords for variable bindings:
     var x: Int = 10;
     x = 20; // Allowed
 
-    var item: my<String> = make_my("hello");
+    var<my<String>> item = make_my("hello");
     item = make_my("world"); // Allowed, old "hello" is dropped
     ```
 
 *   **`const`**: Declares an immutable binding. The variable cannot be reassigned after initialization.
     ```vyn
-    const PI: Float = 3.14159;
+    const<Float> PI = 3.14159;
     // PI = 3.0; // Error: cannot reassign a const binding
 
-    const GREETING: my<String> = make_my("Hello");
+    const<my<String>> GREETING = make_my("Hello");
     // GREETING = make_my("Hi"); // Error
     ```
     Note: `const` on a binding only prevents reassignment. If the bound value holds a mutable type (e.g., `my<Data>`), the data *within* that value might still be modifiable through methods on `Data`, unless the type itself is immutable (e.g., `my<Data const>`).
 
     ```vyn
-    class Counter { var value: Int = 0; fn increment(&mut self) { self.value = self.value + 1; } }
-    const c: my<Counter> = make_my(Counter{});
+    class Counter { var<Int> value = 0; fn increment(&mut self) { self.value = self.value + 1; } }
+    const<my<Counter>> c = make_my(Counter{});
     // c = make_my(Counter{}); // Error: c is a const binding
     c.increment(); // Allowed, if Counter.increment takes their<Counter> (or similar for owned)
                    // and modifies internal state. The binding `c` is const,
@@ -115,8 +115,8 @@ Function parameters use ownership types to define how arguments are passed:
         print(data.value);
         // data.value = 10; // Error
     }
-    var owner_mut: my<Foo> = make_my(Foo{value: 7});
-    const owner_const: my<Foo const> = make_my(Foo{value: 8});
+    var<my<Foo>> owner_mut = make_my(Foo{value: 7});
+    const<my<Foo const>> owner_const = make_my(Foo{value: 8});
 
     read_data(view owner_mut);
     read_data(view owner_const);
@@ -128,17 +128,17 @@ Fields within structs and classes are declared with a name and a type. Their mut
 
 ```vyn
 struct Point {
-    x: Int; // A field of value type
+    var<Int> x; // A field of value type
     y: Int;
     meta: my<String>; // An owned field
 }
 
 // Instance mutability:
-var p1: my<Point> = make_my(Point { x: 10, y: 20, meta: make_my("info") });
+var<my<Point>> p1 = make_my(Point { x: 10, y: 20, meta: make_my("info") });
 p1.x = 15; // Allowed, p1 is mutable and x is a value type field
 p1.meta = make_my("new_info"); // Allowed, p1 is mutable, old meta is dropped
 
-const p2: my<Point> = make_my(Point { x: 0, y: 0, meta: make_my("const_info") });
+const<my<Point>> p2 = make_my(Point { x: 0, y: 0, meta: make_my("const_info") });
 // p2.x = 5; // Error: if p2 is a const binding to my<Point>, direct field mutation
             // might be disallowed or depend on whether Point is a "const-friendly" type.
             // Typically, for `const p: my<T>`, `T` itself must be treated as `T const`.
@@ -150,10 +150,10 @@ const p2: my<Point> = make_my(Point { x: 0, y: 0, meta: make_my("const_info") })
 // The AST supports `isMutable` for FieldDeclaration, implying `var field: Type` or `const field: Type`.
 // Example if `var`/`const` field modifiers are used:
 struct Config {
-    var refresh_rate: Int;
-    const api_key: String;
+    var<Int> refresh_rate;
+    const<String> api_key;
 }
-var my_config = Config { refresh_rate: 60, api_key: "xyz" };
+var<Config> my_config = Config { refresh_rate: 60, api_key: "xyz" };
 my_config.refresh_rate = 30; // OK
 // my_config.api_key = "abc"; // Error: api_key is a const field binding
 ```

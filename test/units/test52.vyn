@@ -1,0 +1,10 @@
+//# EXPECTED ERROR: view() can only be used inside an unsafe block
+
+fn<Int> main() -> {
+    var<my<Int>> x = 10;
+    
+    // Using view outside unsafe block should fail
+    var<their<Int const>> v = view(x);
+    
+    return x;
+}

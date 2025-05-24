@@ -678,7 +678,7 @@ regular_array_literal:
     }
 
     vyn::ast::ExprPtr ExpressionParser::parse_unary_expr() {
-        if (match(TokenType::BANG) || match(TokenType::MINUS) || match(TokenType::TILDE) || match(TokenType::KEYWORD_AWAIT) || match(TokenType::KEYWORD_VIEW)) { // Added KEYWORD_VIEW
+        if (match(TokenType::BANG) || match(TokenType::MINUS) || match(TokenType::TILDE) || match(TokenType::KEYWORD_AWAIT)) {
             token::Token op_token = previous_token();
             vyn::ast::ExprPtr operand = parse_unary_expr(); 
             // For await, we might want a specific AST node, e.g., AwaitExpression,
@@ -809,8 +809,7 @@ bool ExpressionParser::is_expression_start(vyn::TokenType type) const {
     if (type == TokenType::BANG ||
         type == TokenType::MINUS ||
         type == TokenType::TILDE ||
-        type == TokenType::KEYWORD_AWAIT || // if await is an operator
-        type == TokenType::KEYWORD_VIEW)    // if view is an operator
+        type == TokenType::KEYWORD_AWAIT) // if await is an operator
     {
         return true;
     }

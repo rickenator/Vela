@@ -1,0 +1,22 @@
+// filepath: test/units/test_relaxed.vyn
+// @test: Simple Relaxed Syntax
+// @description: Simple test file demonstrating relaxed syntax for variable declarations
+// @category: parser, syntax
+// @expect: pass
+// @parse-only: true
+// @expect-output: n/a
+// @expect-error: n/a
+// @expect-return: n/a
+
+fn<Int> main() -> {
+    // Test relaxed syntax (Type instead of var<Type>)
+    Int x = 42;
+    
+    // Test const with relaxed syntax (const Type instead of const<Type>)
+    const Int y = 10;
+    
+    // Test auto type inference
+    auto z = x + y;
+    
+    return z;
+}

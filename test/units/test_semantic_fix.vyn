@@ -1,0 +1,7 @@
+fn<Int> main() -> {
+    var<Float> x; // x is Float
+    unsafe {
+        var<loc<Int>> p = loc(x); // Error: trying to get loc<Int> from Float
+    }
+    return 0;
+} 

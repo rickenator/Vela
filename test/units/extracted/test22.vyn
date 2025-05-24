@@ -1,0 +1,17 @@
+// @test: Parser handles main.vyn async function
+// @description: Extracted from tests.cpp - Parser handles main.vyn async function
+// @category: parser
+// @expect: pass
+// @parse-only: true
+// @expect-output: n/a
+// @expect-error: n/a
+// @expect-return: n/a
+
+async fn<String> fetch_data(url: String) -> {
+    const<my<http::client::Connection>> conn = http::client::connect(url);
+    const<my<http::client::Response>> resp = await (view conn).get("/");
+    if (resp.status != 200) {
+        throw NetworkError("Failed to fetch: " + resp.status.to_string());
+    }
+    return (view resp).text();
+}

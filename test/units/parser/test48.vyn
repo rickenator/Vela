@@ -1,0 +1,13 @@
+// filepath: /home/rick/Projects/Vyn/test/units/extracted/test48.vyn
+// @test: Semantic: 'loc()' operand type matching loc<T>
+// @description: Extracted from tests.cpp - Semantic: 'loc()' operand type matching loc<T>
+// @category: parser
+// @expect: pass
+// @parse-only: true
+// @expect-output: n/a
+// @expect-error: n/a
+// @expect-return: n/a
+
+    std::string source = R"(
+fn<Void> main() -> -> Int{
+    var<Float> x; // x is Float

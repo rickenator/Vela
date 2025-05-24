@@ -1483,3 +1483,39 @@ void LLVMCodegen::visit(vyn::ast::MemberExpression *node) {
     m_currentLLVMValue = loadedValue;
     return;
 }
+
+void LLVMCodegen::visit(vyn::ast::BorrowExpression* node) {
+    if (!node->expression) {
+        logError(node->loc, "Empty expression in borrow/view operation");
+        m_currentLLVMValue = nullptr;
+        return;
+    }
+    
+    // Generate code for the expression being borrowed
+    node->expression->accept(*this);
+    if (!m_currentLLVMValue) {
+        logError(node->expression->loc, "Failed to generate code for expression in borrow/view operation");
+        return;
+    }
+    
+    // Get the address of the expression being borrowed
+    llvm::Value* exprValue = m_currentLLVMValue;
+    
+    // If the expression is not already a pointer (e.g., a local variable),
+    // we need to create a pointer to it (only for rvalues)
+    if (!exprValue->getType()->isPointerTy()) {
+        // Create a temporary alloca to store the value
+        llvm::Value* tempAlloca = builder->CreateAlloca(
+            exprValue->getType(), nullptr, "borrow_temp");
+        builder->CreateStore(exprValue, tempAlloca);
+        exprValue = tempAlloca;
+    }
+    
+    // For borrow/view, we're essentially creating a non-owning reference
+    // In LLVM IR, this is just the pointer itself
+    m_currentLLVMValue = exprValue;
+    
+    // In a more sophisticated implementation, we might:
+    // 1. For owned types (my<T>), extract the raw pointer from the ownership wrapper
+    // 2. For borrow vs view, add metadata or use a wrapper type to track mutability
+}

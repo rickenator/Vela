@@ -1,0 +1,11 @@
+// @test: Parser handles main.vyn imports
+// @description: Extracted from tests.cpp - Parser handles main.vyn imports
+// @category: parser
+// @expect: pass
+// @parse-only: true
+// @expect-output: n/a
+// @expect-error: n/a
+// @expect-return: n/a
+
+import vyn::fs
+smuggle http::client

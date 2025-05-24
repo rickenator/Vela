@@ -1,0 +1,9 @@
+// Memory semantics example with borrow/view shorthand
+// Pointer and borrowing examples
+unsafe {
+  var<loc<Int>> p = loc(x)
+  at(p) = 42
+  var<their<Int>> b = borrow(x)       // inferred mutable borrow
+  var<their<Int const>> v = view(x)    // inferred immutable borrow
+  at(loc(b)) = 100                     // modify via borrow
+}

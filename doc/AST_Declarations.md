@@ -28,7 +28,7 @@ namespace vyn::ast {
 class VariableDeclaration : public Declaration {
 public:
     IdentifierPtr name;
-    std::optional<TypeNodePtr> type; // Optional: type can be inferred
+    std::optional<TypeNodePtr> type; // Type annotation (mandatory with generic-angled var<T>/const<T> syntax)
     std::optional<ExprPtr> initializer;
     bool isMutable;
     bool isConst; // For compile-time constants
@@ -42,6 +42,8 @@ public:
 
 } // namespace vyn::ast
 ```
+
+**Note:** As of v0.3.4, Vyn uses the `var<T>`/`const<T>` declaration syntax, so every `VariableDeclaration` node will have `type` set (no longer optional in practice).
 
 ## 2. Function Parameter (`vyn::ast::FunctionParameter`)
 

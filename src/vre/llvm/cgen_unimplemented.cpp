@@ -8,10 +8,7 @@
 
 namespace vyn {
 
-void LLVMCodegen::visit(vyn::ast::BorrowExpression* node) {
-    // TODO: Implement
-    m_currentLLVMValue = nullptr;
-}
+// Removed duplicate BorrowExpression visitor - already implemented in cgen_expr.cpp
 
 void LLVMCodegen::visit(vyn::ast::GenericInstantiationExpression* node) {
     // TODO: Implement

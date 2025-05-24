@@ -77,11 +77,12 @@ vyn::ast::TypeNodePtr TypeParser::parse_atomic_or_group_type() { // Corrected na
     SourceLocation start_loc = peek().location;
     vyn::ast::TypeNodePtr type_node = nullptr;
 
-    // Allow KEYWORD_MY, KEYWORD_OUR, KEYWORD_THEIR as type identifiers, e.g., for my<T>, their<T>
+    // Allow special keywords as type identifiers, e.g., for my<T>, their<T>, const<T>
     if (match(vyn::TokenType::IDENTIFIER) || 
         match(vyn::TokenType::KEYWORD_MY) ||
-        match(vyn::TokenType::KEYWORD_OUR) || // Added KEYWORD_OUR
-        match(vyn::TokenType::KEYWORD_THEIR)) { // Added KEYWORD_THEIR
+        match(vyn::TokenType::KEYWORD_OUR) ||
+        match(vyn::TokenType::KEYWORD_THEIR) ||
+        match(vyn::TokenType::KEYWORD_CONST)) { // Added KEYWORD_CONST for const<T>
         
         vyn::SourceLocation path_loc = this->previous_token().location; 
         std::string qualified_name = this->previous_token().lexeme;

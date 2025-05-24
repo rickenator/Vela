@@ -1,0 +1,18 @@
+// filepath: /home/rick/Projects/Vyn/test/units/jit/test_basic_pointer_operations_test.vyn
+// @test: Basic pointer operations test
+// @description: Extracted from tests.cpp - Basic pointer operations test
+// @category: jit, pointer
+// @expect: pass
+// @expect-output: n/a
+// @expect-error: n/a
+// @expect-return: 99
+
+fn<Int> main() -> {
+    var<Int> x = 77;
+    var<loc<Int>> p;
+    unsafe {
+        p = loc(x);
+        at(p) = 99;
+    }
+    return x;
+}

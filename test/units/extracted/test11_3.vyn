@@ -1,0 +1,11 @@
+// @test: Parser handles async/await
+// @description: Extracted from tests.cpp - Parser handles async/await
+// @category: parser
+// @expect: pass
+// @parse-only: true
+// @expect-output: n/a
+// @expect-error: n/a
+// @expect-return: n/a
+
+async fn<Void> example() ->
+    await foo()
